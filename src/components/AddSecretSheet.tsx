@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X, Tag, Plus, Key, Lock, Check, Loader2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { X, Tag, Plus, Key, Lock, Check, Loader2, Wand2 } from 'lucide-react';
 import { useVault } from '@/context/VaultContext';
 import { getStoredTags, addTag as addTagToStore, TAG_COLORS, type Tag as TagType } from '@/lib/secretStore';
 import { npubToHex, sendDM, nsecToHex } from '@/lib/nostrRelay';
@@ -9,6 +9,8 @@ import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Slider } from '@/components/ui/slider';
 
 interface AddSecretSheetProps {
   open: boolean;
@@ -28,6 +30,42 @@ const AddSecretSheet = ({ open, onOpenChange, defaultKeyId, onSecretSaved }: Add
   const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0].value);
   const [tags, setTags] = useState<TagType[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Password generator state
+  const [passwordLength, setPasswordLength] = useState(16);
+  const [useUppercase, setUseUppercase] = useState(true);
+  const [useLowercase, setUseLowercase] = useState(true);
+  const [useNumbers, setUseNumbers] = useState(true);
+  const [useSymbols, setUseSymbols] = useState(true);
+
+  const generatePassword = useCallback(() => {
+    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+    const numbers = '0123456789';
+    const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+    
+    let chars = '';
+    if (useUppercase) chars += uppercase;
+    if (useLowercase) chars += lowercase;
+    if (useNumbers) chars += numbers;
+    if (useSymbols) chars += symbols;
+    
+    if (chars.length === 0) {
+      toast.error('Select at least one character type');
+      return;
+    }
+    
+    let password = '';
+    const array = new Uint32Array(passwordLength);
+    crypto.getRandomValues(array);
+    
+    for (let i = 0; i < passwordLength; i++) {
+      password += chars[array[i] % chars.length];
+    }
+    
+    setContent(password);
+    toast.success('Password generated');
+  }, [passwordLength, useUppercase, useLowercase, useNumbers, useSymbols]);
 
   // Load tags
   useEffect(() => {
@@ -170,6 +208,69 @@ const AddSecretSheet = ({ open, onOpenChange, defaultKeyId, onSecretSaved }: Add
               placeholder="Enter your secret..."
               className="bg-card/50 min-h-[120px]"
             />
+            
+            {/* Password Generator */}
+            <div className="mt-3 p-3 rounded-xl bg-card/30 border border-border/50">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs text-muted-foreground font-medium">Password Generator</span>
+                <button
+                  type="button"
+                  onClick={generatePassword}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/20 text-primary text-xs font-medium hover:bg-primary/30 transition-colors"
+                >
+                  <Wand2 className="w-3.5 h-3.5" />
+                  Generate
+                </button>
+              </div>
+              
+              {/* Length slider */}
+              <div className="mb-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-muted-foreground">Length</span>
+                  <span className="text-xs font-mono text-foreground bg-card/50 px-2 py-0.5 rounded">{passwordLength}</span>
+                </div>
+                <Slider
+                  value={[passwordLength]}
+                  onValueChange={(v) => setPasswordLength(v[0])}
+                  min={8}
+                  max={64}
+                  step={1}
+                  className="w-full"
+                />
+              </div>
+              
+              {/* Character options */}
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
+                  <Checkbox 
+                    checked={useUppercase} 
+                    onCheckedChange={(c) => setUseUppercase(c === true)}
+                  />
+                  ABC (uppercase)
+                </label>
+                <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
+                  <Checkbox 
+                    checked={useLowercase} 
+                    onCheckedChange={(c) => setUseLowercase(c === true)}
+                  />
+                  abc (lowercase)
+                </label>
+                <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
+                  <Checkbox 
+                    checked={useNumbers} 
+                    onCheckedChange={(c) => setUseNumbers(c === true)}
+                  />
+                  123 (numbers)
+                </label>
+                <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
+                  <Checkbox 
+                    checked={useSymbols} 
+                    onCheckedChange={(c) => setUseSymbols(c === true)}
+                  />
+                  !@# (symbols)
+                </label>
+              </div>
+            </div>
           </div>
 
           {/* Key Selector */}
