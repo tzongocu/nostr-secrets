@@ -23,7 +23,7 @@ export interface RelaySecret {
   keyId: string;
   keyName: string;
   createdAt: Date;
-  relay: string;
+  relays: string[]; // All relays where this secret was found
 }
 
 interface NostrSecretPayload {
@@ -91,9 +91,15 @@ export const fetchSecretsFromRelays = async (
       errors.push(result.error);
     }
     for (const secret of result.secrets) {
-      if (!seenIds.has(secret.id)) {
+      if (seenIds.has(secret.id)) {
+        // Aggregate relays for duplicate secrets
+        const existing = allSecrets.find(s => s.id === secret.id);
+        if (existing && !existing.relays.includes(result.relayUrl)) {
+          existing.relays.push(result.relayUrl);
+        }
+      } else {
         seenIds.add(secret.id);
-        allSecrets.push(secret);
+        allSecrets.push({ ...secret, relays: [result.relayUrl] });
       }
     }
   }
@@ -249,7 +255,7 @@ const parseSecretEvent = async (
       keyId: key.id,
       keyName: key.name,
       createdAt: new Date(event.created_at * 1000),
-      relay,
+      relays: [relay], // Will be aggregated in fetchSecretsFromRelays
     };
   } catch (e) {
     console.error('[RelaySecrets] Parse event error:', e);

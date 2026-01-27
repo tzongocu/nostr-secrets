@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, ChevronDown, ChevronUp, RefreshCw, Loader2, WifiOff, RotateCcw, Archive } from 'lucide-react';
+import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, ChevronDown, ChevronUp, RefreshCw, Loader2, WifiOff, RotateCcw, Archive, Radio } from 'lucide-react';
 import { useVault } from '@/context/VaultContext';
 import { getStoredTags, type Tag as TagType } from '@/lib/secretStore';
 import { KEY_COLORS } from '@/lib/keyStore';
@@ -626,6 +626,10 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
                           }`}
                         >
                           NIP-{secret.encryptionVersion === 2 ? '44' : '04'}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                          <Radio className="w-3 h-3" />
+                          {secret.relays.length}
                         </span>
                       </div>
                     </div>
