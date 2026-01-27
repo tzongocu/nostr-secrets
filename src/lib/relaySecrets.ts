@@ -124,6 +124,11 @@ const fetchFromRelay = async (
         '#p': pubkeys,
         limit: 100,
       };
+      console.log('[RelaySecrets] Fetching with filter:', { 
+        relay: relayUrl, 
+        pubkeys: pubkeys.map(p => p.slice(0, 16) + '...'),
+        keyNames: keys.map(k => k.name)
+      });
       ws.send(JSON.stringify(['REQ', subId, filter]));
     };
 
@@ -173,24 +178,38 @@ const parseSecretEvent = async (
     const pTags = event.tags.filter((t: string[]) => t[0] === 'p');
     const recipientHex = pTags.length > 0 ? pTags[0][1] : null;
     
+    console.log('[RelaySecrets] Event received:', {
+      eventId: event.id.slice(0, 12),
+      authorPubkey: event.pubkey.slice(0, 16) + '...',
+      recipientPubkey: recipientHex?.slice(0, 16) + '...',
+      isSelfAddressed: event.pubkey === recipientHex
+    });
+    
     // Check if this is a self-addressed DM (author = recipient)
     if (event.pubkey !== recipientHex) {
-      console.log('[RelaySecrets] Skipping: not self-addressed DM', event.id.slice(0, 8));
+      console.log('[RelaySecrets] Skipping: not self-addressed DM');
       return null;
     }
 
     // Find the key that owns this secret - STRICT CHECK
     const key = keys.find(k => {
       const keyPubHex = npubToHex(k.publicKey);
-      return keyPubHex === event.pubkey;
+      const matches = keyPubHex === event.pubkey;
+      console.log('[RelaySecrets] Comparing key:', { 
+        keyName: k.name, 
+        keyPubHex: keyPubHex.slice(0, 16) + '...', 
+        eventPubkey: event.pubkey.slice(0, 16) + '...',
+        matches 
+      });
+      return matches;
     });
     
     if (!key) {
-      console.log('[RelaySecrets] Skipping: key not found for pubkey', event.pubkey.slice(0, 16));
+      console.log('[RelaySecrets] Skipping: no matching key found in vault');
       return null;
     }
     
-    console.log('[RelaySecrets] Processing secret for key:', key.name, key.id);
+    console.log('[RelaySecrets] ✓ Matched to key:', key.name, key.id);
 
     // Decrypt the DM content
     const decrypted = await decryptNIP04(event.content, key.privateKey, event.pubkey);
