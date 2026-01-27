@@ -9,7 +9,7 @@ import { useRelaySecrets } from '@/hooks/useRelaySecrets';
 import { useOfflineQueue } from '@/hooks/useOfflineQueue';
 import { useRelaySync } from '@/hooks/useRelaySync';
 import { toast } from 'sonner';
-import logoVault from '@/assets/logo-vault.png';
+import logoVault from '@/assets/logo-new.png';
 import AddSecretSheet from './AddSecretSheet';
 import {
   AlertDialog,

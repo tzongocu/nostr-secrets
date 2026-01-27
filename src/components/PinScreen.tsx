@@ -4,7 +4,7 @@ import { X, Shield, AlertTriangle, Lock, CheckCircle, Fingerprint } from 'lucide
 import { APP_VERSION } from '@/lib/constants';
 import { useVault } from '@/context/VaultContext';
 import Portal from './Portal';
-import logoVault from '@/assets/logo-vault.png';
+import logoVault from '@/assets/logo-new.png';
 import {
   isBiometricsEnabled,
   authenticateWithBiometric,
