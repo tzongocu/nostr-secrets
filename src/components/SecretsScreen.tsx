@@ -154,6 +154,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
   const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null);
   const [showDeleted, setShowDeleted] = useState(false);
   const [deletedIds, setDeletedIds] = useState<string[]>(() => getDeletedSecretIds());
+  const [deletedSearchQuery, setDeletedSearchQuery] = useState('');
   const selectorRef = useRef<HTMLDivElement>(null);
   const allTags = getStoredTags();
 
@@ -236,13 +237,26 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
     });
   }, [secrets, displayKey, searchQuery, selectedTags, deletedIds]);
 
-  // Get deleted secrets for current key
+  // Get deleted secrets for current key (with search filter)
   const deletedSecrets = useMemo(() => {
     if (!displayKey) return [];
     
-    return secrets.filter(secret => 
-      secret.keyId === displayKey.id && deletedIds.includes(secret.eventId)
-    );
+    return secrets.filter(secret => {
+      if (secret.keyId !== displayKey.id) return false;
+      if (!deletedIds.includes(secret.eventId)) return false;
+      
+      // Apply search filter
+      if (deletedSearchQuery) {
+        return secret.title.toLowerCase().includes(deletedSearchQuery.toLowerCase());
+      }
+      return true;
+    });
+  }, [secrets, displayKey, deletedIds, deletedSearchQuery]);
+
+  // Total deleted count (before search filter)
+  const totalDeletedCount = useMemo(() => {
+    if (!displayKey) return 0;
+    return secrets.filter(s => s.keyId === displayKey.id && deletedIds.includes(s.eventId)).length;
   }, [secrets, displayKey, deletedIds]);
 
   const handleSelectKey = (id: string) => {
@@ -658,43 +672,72 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
         )}
 
         {/* Deleted Secrets Section */}
-        {deletedSecrets.length > 0 && (
+        {totalDeletedCount > 0 && (
           <div className="mt-6">
             <button
               onClick={() => setShowDeleted(!showDeleted)}
               className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-3 transition-colors"
             >
               <Archive className="w-4 h-4" />
-              <span>Deleted ({deletedSecrets.length})</span>
+              <span>Deleted ({totalDeletedCount})</span>
               <ChevronDown className={`w-4 h-4 transition-transform ${showDeleted ? 'rotate-180' : ''}`} />
             </button>
             
             {showDeleted && (
-              <div className="space-y-2">
-                {deletedSecrets.map((secret) => (
-                  <div
-                    key={secret.id}
-                    className="glass-card rounded-xl border border-border/30 overflow-hidden opacity-60"
-                  >
-                    <div className="p-3 flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-foreground truncate text-sm line-through">
-                          {secret.title}
-                        </h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Marked as deleted
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleRestore(secret.eventId)}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors text-xs"
+              <div className="space-y-3">
+                {/* Search in deleted */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Search deleted..."
+                    value={deletedSearchQuery}
+                    onChange={(e) => setDeletedSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-8 py-2 rounded-lg bg-card/30 border border-border/50 text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  />
+                  {deletedSearchQuery && (
+                    <button 
+                      onClick={() => setDeletedSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                    >
+                      <X className="w-3.5 h-3.5 text-muted-foreground" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Deleted items list */}
+                {deletedSecrets.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-2">
+                    No matching deleted secrets
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {deletedSecrets.map((secret) => (
+                      <div
+                        key={secret.id}
+                        className="glass-card rounded-xl border border-border/30 overflow-hidden opacity-60"
                       >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        Restore
-                      </button>
-                    </div>
+                        <div className="p-3 flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-foreground truncate text-sm line-through">
+                              {secret.title}
+                            </h3>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Marked as deleted
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleRestore(secret.eventId)}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors text-xs"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            Restore
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>
