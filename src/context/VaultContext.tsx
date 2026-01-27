@@ -23,6 +23,8 @@ import {
 import type { NostrKey, SignLog } from '@/lib/keyStore';
 import { disableBiometrics, storeCredentials, isBiometricsEnabled } from '@/hooks/useBiometrics';
 import { hasLegacyDeletedSecrets, migrateLegacyDeletedSecrets } from '@/lib/deletedSecretsStore';
+import { verifyVaultIntegrity, updateVaultChecksum, type IntegrityReport } from '@/lib/vaultIntegrity';
+import { toast } from 'sonner';
 
 interface VaultContextValue {
   pinEnabled: boolean;
@@ -50,6 +52,7 @@ interface VaultContextValue {
   resetVault: () => void;
   enablePin: (pin: string) => Promise<void>;
   turnOffPin: () => void;
+  checkIntegrity: () => Promise<IntegrityReport | null>;
 }
 
 const VaultContext = createContext<VaultContextValue | null>(null);
@@ -131,6 +134,9 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
         saveUnencryptedVault(next);
       }
 
+      // Update checksum after save
+      await updateVaultChecksum(next);
+
       setData(next);
     },
     [pin, pinEnabled]
@@ -147,6 +153,29 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
   const unlock = useCallback(async (inputPin: string): Promise<boolean> => {
     try {
       const vaultData = await unlockVault(inputPin);
+      
+      // Verify integrity and self-heal if needed
+      const { report, healedData } = await verifyVaultIntegrity(vaultData, true);
+      
+      if (!report.isValid && healedData) {
+        console.log('[Vault] Self-healed issues:', report.repaired);
+        await saveVault(inputPin, healedData);
+        await updateVaultChecksum(healedData);
+        setPin(inputPin);
+        dataRef.current = healedData;
+        setData(healedData);
+        
+        if (report.repaired.length > 0) {
+          toast.info('Vault repaired', {
+            description: `Fixed ${report.repaired.length} issue(s)`
+          });
+        }
+        return true;
+      }
+      
+      // Update checksum on successful unlock
+      await updateVaultChecksum(vaultData);
+      
       setPin(inputPin);
       dataRef.current = vaultData;
       setData(vaultData);
@@ -329,6 +358,33 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
     setPinEnabled(false);
   }, []);
 
+  const checkIntegrity = useCallback(async (): Promise<IntegrityReport | null> => {
+    const currentData = dataRef.current;
+    if (!currentData) return null;
+    
+    const { report, healedData } = await verifyVaultIntegrity(currentData, true);
+    
+    if (!report.isValid && healedData) {
+      // Auto-heal and persist
+      if (pinEnabled && pin) {
+        await saveVault(pin, healedData);
+      } else if (!pinEnabled) {
+        saveUnencryptedVault(healedData);
+      }
+      await updateVaultChecksum(healedData);
+      dataRef.current = healedData;
+      setData(healedData);
+      
+      if (report.repaired.length > 0) {
+        toast.success('Vault repaired', {
+          description: `Fixed ${report.repaired.length} issue(s)`
+        });
+      }
+    }
+    
+    return report;
+  }, [pinEnabled, pin]);
+
   return (
     <VaultContext.Provider
       value={{
@@ -357,6 +413,7 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
         resetVault,
         enablePin,
         turnOffPin,
+        checkIntegrity,
       }}
     >
       {children}
