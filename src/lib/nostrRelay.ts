@@ -315,18 +315,24 @@ export const nsecToHex = (nsec: string): string => {
 };
 
 // Send encrypted DM
+export interface SendDMResult {
+  success: boolean;
+  confirmedRelays: number;
+  totalRelays: number;
+}
+
 export const sendDM = async (
   senderKey: NostrKey,
   recipientPubkeyHex: string,
   content: string
-): Promise<boolean> => {
+): Promise<SendDMResult> => {
   try {
     console.log('[SendDM] Starting...', { recipient: recipientPubkeyHex.slice(0, 16) + '...', contentLength: content.length });
     
     const encrypted = await encryptNIP04(content, senderKey.privateKey, recipientPubkeyHex);
     if (!encrypted) {
       console.error('[SendDM] Encryption failed');
-      return false;
+      return { success: false, confirmedRelays: 0, totalRelays: 0 };
     }
     console.log('[SendDM] Encrypted successfully');
 
@@ -371,7 +377,7 @@ export const sendDM = async (
 
     console.log('[SendDM] Event signed, sending to relays...');
 
-    // Send to all relays
+    // Send to all relays with increased timeout (10s instead of 5s)
     const activeRelays = getActiveRelays();
     const sendPromises = activeRelays.map(async (url) => {
       try {
@@ -383,7 +389,7 @@ export const sendDM = async (
             console.log(`[SendDM] Timeout on ${url}`);
             ws.close();
             resolve({ url, success: false, sent: eventSent });
-          }, 5000);
+          }, 10000); // Increased to 10 seconds
 
           ws.onopen = () => {
             console.log(`[SendDM] Connected to ${url}, sending event...`);
@@ -420,11 +426,15 @@ export const sendDM = async (
     const sentCount = results.filter(r => r.sent).length;
     console.log(`[SendDM] Results: ${successCount} confirmed, ${sentCount} sent out of ${results.length} relays`);
     
-    // Consider success if at least one relay received the message
-    return sentCount > 0;
+    // Return detailed result
+    return {
+      success: successCount > 0,
+      confirmedRelays: successCount,
+      totalRelays: results.length,
+    };
   } catch (e) {
     console.error('[SendDM] Error:', e);
-    return false;
+    return { success: false, confirmedRelays: 0, totalRelays: 0 };
   }
 };
 
