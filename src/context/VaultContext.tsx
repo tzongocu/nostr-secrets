@@ -21,7 +21,6 @@ import {
   type VaultData,
 } from '@/lib/vault';
 import type { NostrKey, SignLog } from '@/lib/keyStore';
-import type { Secret } from '@/lib/secretStore';
 import { disableBiometrics, storeCredentials, isBiometricsEnabled } from '@/hooks/useBiometrics';
 
 interface VaultContextValue {
@@ -30,7 +29,6 @@ interface VaultContextValue {
   isUnlocked: boolean;
   keys: NostrKey[];
   logs: SignLog[];
-  secrets: Secret[];
   defaultKeyId: string | null;
   currentPin: string | null; // Exposed for biometric registration
   setupPin: (pin: string) => Promise<void>;
@@ -43,9 +41,6 @@ interface VaultContextValue {
   removeKey: (id: string) => Promise<void>;
   addLog: (log: SignLog) => Promise<void>;
   clearLogs: () => Promise<void>;
-  addSecret: (secret: Secret) => Promise<void>;
-  updateSecret: (secret: Secret) => Promise<void>;
-  removeSecret: (id: string) => Promise<void>;
   setDefaultKey: (id: string | null) => Promise<void>;
   resetVault: () => void;
   enablePin: (pin: string) => Promise<void>;
@@ -60,7 +55,7 @@ export const useVault = () => {
   return ctx;
 };
 
-const emptyVault: VaultData = { keys: [], logs: [], secrets: [] };
+const emptyVault: VaultData = { keys: [], logs: [] };
 
 export const VaultProvider = ({ children }: { children: ReactNode }) => {
   const initialSettings = getVaultSettings();
@@ -214,39 +209,6 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
     [persist, pinEnabled, pin]
   );
 
-  const addSecret = useCallback(
-    async (secret: Secret) => {
-      if (pinEnabled && !pin) return;
-
-      const base: VaultData = dataRef.current ?? emptyVault;
-      const next: VaultData = { ...base, secrets: [secret, ...base.secrets] };
-      await persist(next);
-    },
-    [persist, pinEnabled, pin]
-  );
-
-  const updateSecret = useCallback(
-    async (secret: Secret) => {
-      if (pinEnabled && !pin) return;
-
-      const base: VaultData = dataRef.current ?? emptyVault;
-      const next: VaultData = { ...base, secrets: base.secrets.map((s) => s.id === secret.id ? secret : s) };
-      await persist(next);
-    },
-    [persist, pinEnabled, pin]
-  );
-
-  const removeSecret = useCallback(
-    async (id: string) => {
-      if (pinEnabled && !pin) return;
-
-      const base: VaultData = dataRef.current ?? emptyVault;
-      const next: VaultData = { ...base, secrets: base.secrets.filter((s) => s.id !== id) };
-      await persist(next);
-    },
-    [persist, pinEnabled, pin]
-  );
-
   const setDefaultKey = useCallback(
     async (id: string | null) => {
       if (pinEnabled && !pin) return;
@@ -305,7 +267,6 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
         isUnlocked,
         keys: data?.keys ?? [],
         logs: data?.logs ?? [],
-        secrets: data?.secrets ?? [],
         defaultKeyId: data?.defaultKeyId ?? null,
         currentPin: pin,
         setupPin,
@@ -318,9 +279,6 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
         removeKey,
         addLog,
         clearLogs,
-        addSecret,
-        updateSecret,
-        removeSecret,
         setDefaultKey,
         resetVault,
         enablePin,

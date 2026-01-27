@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trash2, Settings, Shield, Radio } from 'lucide-react';
+import { Trash2, Settings, Shield, Radio, Database } from 'lucide-react';
 import { APP_NAME, APP_VERSION } from '@/lib/constants';
 import { useVault } from '@/context/VaultContext';
 import RelayManager from '@/components/RelayManager';
@@ -74,6 +74,40 @@ const SettingsScreen = ({ onLogout, onEnablePin }: SettingsScreenProps) => {
             <div className="flex-1 text-left">
               <p className="font-medium text-foreground">Manage Relays</p>
               <p className="text-xs text-muted-foreground">Sync secrets to Nostr relays</p>
+            </div>
+          </button>
+
+          {/* Clear Legacy Data */}
+          <button
+            onClick={() => {
+              // Clear any legacy secrets from local storage
+              const storageKey = 'nostr-vault-plain';
+              const stored = localStorage.getItem(storageKey);
+              if (stored) {
+                try {
+                  const data = JSON.parse(stored);
+                  if (data.secrets && data.secrets.length > 0) {
+                    delete data.secrets;
+                    localStorage.setItem(storageKey, JSON.stringify(data));
+                    toast.success(`Cleared ${data.secrets?.length || 0} legacy secrets from local storage`);
+                  } else {
+                    toast.info('No legacy secrets to clear');
+                  }
+                } catch {
+                  toast.info('No legacy data found');
+                }
+              } else {
+                toast.info('No legacy data found');
+              }
+            }}
+            className="w-full glass-card rounded-xl p-4 neon-border flex items-center gap-3 transition-all hover:bg-card/80"
+          >
+            <div className="w-10 h-10 rounded-full bg-muted/20 flex items-center justify-center">
+              <Database className="w-5 h-5 text-muted-foreground" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="font-medium text-foreground">Clear Legacy Cache</p>
+              <p className="text-xs text-muted-foreground">Remove old locally-stored secrets</p>
             </div>
           </button>
 

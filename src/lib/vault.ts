@@ -5,12 +5,10 @@
  */
 
 import type { NostrKey, SignLog } from './keyStore';
-import type { Secret } from './secretStore';
 
 export interface VaultData {
   keys: NostrKey[];
   logs: SignLog[];
-  secrets: Secret[];
   defaultKeyId?: string;
 }
 
@@ -141,16 +139,10 @@ const decrypt = async (payload: string, key: CryptoKey): Promise<VaultData> => {
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv.buffer as ArrayBuffer }, key, cipher.buffer as ArrayBuffer);
   const json = decode(new Uint8Array(plain));
   const parsed = JSON.parse(json);
-  // Rehydrate dates and preserve all fields
+  // Rehydrate dates - secrets are no longer stored locally
   return {
     keys: (parsed.keys ?? []).map((k: any) => ({ ...k, createdAt: new Date(k.createdAt) })),
     logs: (parsed.logs ?? []).map((l: any) => ({ ...l, timestamp: new Date(l.timestamp) })),
-    secrets: (parsed.secrets ?? []).map((s: any) => ({ 
-      ...s, 
-      createdAt: new Date(s.createdAt),
-      updatedAt: new Date(s.updatedAt),
-      syncedAt: s.syncedAt ? new Date(s.syncedAt) : undefined,
-    })),
     defaultKeyId: parsed.defaultKeyId,
   };
 };
@@ -159,15 +151,10 @@ const decrypt = async (payload: string, key: CryptoKey): Promise<VaultData> => {
 
 const parseRawData = (json: string): VaultData => {
   const parsed = JSON.parse(json);
+  // Secrets are no longer stored locally - they come from relays
   return {
     keys: (parsed.keys ?? []).map((k: any) => ({ ...k, createdAt: new Date(k.createdAt) })),
     logs: (parsed.logs ?? []).map((l: any) => ({ ...l, timestamp: new Date(l.timestamp) })),
-    secrets: (parsed.secrets ?? []).map((s: any) => ({ 
-      ...s, 
-      createdAt: new Date(s.createdAt),
-      updatedAt: new Date(s.updatedAt),
-      syncedAt: s.syncedAt ? new Date(s.syncedAt) : undefined,
-    })),
     defaultKeyId: parsed.defaultKeyId,
   };
 };
@@ -176,11 +163,11 @@ export const loadUnencryptedVault = (): VaultData => {
   migrateLegacyStorageIfNeeded();
 
   const stored = localStorage.getItem(PLAIN_STORAGE_KEY);
-  if (!stored) return { keys: [], logs: [], secrets: [] };
+  if (!stored) return { keys: [], logs: [] };
   try {
     return parseRawData(stored);
   } catch {
-    return { keys: [], logs: [], secrets: [] };
+    return { keys: [], logs: [] };
   }
 };
 
@@ -200,7 +187,7 @@ export const createVault = async (pin: string): Promise<void> => {
   migrateLegacyStorageIfNeeded();
 
   const key = await deriveKey(pin);
-  const empty: VaultData = { keys: [], logs: [], secrets: [] };
+  const empty: VaultData = { keys: [], logs: [] };
   const payload = await encrypt(empty, key);
 
   localStorage.setItem(ENCRYPTED_STORAGE_KEY, payload);

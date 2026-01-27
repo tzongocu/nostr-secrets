@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, Tag, Plus, Key, Lock, Check, Send, Loader2 } from 'lucide-react';
+import { X, Tag, Plus, Key, Lock, Check, Loader2 } from 'lucide-react';
 import { useVault } from '@/context/VaultContext';
-import { getStoredTags, addTag as addTagToStore, TAG_COLORS, type Tag as TagType, type Secret } from '@/lib/secretStore';
+import { getStoredTags, addTag as addTagToStore, TAG_COLORS, type Tag as TagType } from '@/lib/secretStore';
 import { encryptNIP04, npubToHex, sendDM } from '@/lib/nostrRelay';
 import { KEY_COLORS, type NostrKey } from '@/lib/keyStore';
 import { toast } from 'sonner';
@@ -13,10 +13,11 @@ interface AddSecretSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultKeyId?: string;
+  onSecretSaved?: () => void;
 }
 
-const AddSecretSheet = ({ open, onOpenChange, defaultKeyId }: AddSecretSheetProps) => {
-  const { keys, addSecret } = useVault();
+const AddSecretSheet = ({ open, onOpenChange, defaultKeyId, onSecretSaved }: AddSecretSheetProps) => {
+  const { keys } = useVault();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -92,41 +93,34 @@ const AddSecretSheet = ({ open, onOpenChange, defaultKeyId }: AddSecretSheetProp
         return;
       }
 
-      // Create secret object
-      const secret: Secret = {
-        id: crypto.randomUUID(),
-        title: title.trim(),
-        encryptedContent: encrypted,
-        tags: selectedTags,
-        keyId: selectedKeyId,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      // Auto sync to relay as self-addressed DM
+      // Create DM content with secret metadata
       const dmContent = JSON.stringify({
         type: 'nostr-secret',
         version: 1,
-        title: secret.title,
-        tags: secret.tags,
-        content: secret.encryptedContent,
+        title: title.trim(),
+        tags: selectedTags,
+        content: encrypted,
       });
 
+      // Send to relay - MUST succeed for save to complete
       const success = await sendDM(key, pubkeyHex, dmContent);
-      if (success) {
-        secret.syncedAt = new Date();
-        toast.success('Secret saved and synced');
-      } else {
-        toast.warning('Secret saved locally but sync failed');
+      
+      if (!success) {
+        toast.error('Cannot save - no relay connection');
+        setIsSaving(false);
+        return;
       }
 
-      await addSecret(secret);
+      toast.success('Secret saved to relay');
 
       // Reset form
       setTitle('');
       setContent('');
       setSelectedTags([]);
       onOpenChange(false);
+      
+      // Trigger refresh
+      onSecretSaved?.();
     } catch (e) {
       console.error('Save error:', e);
       toast.error('Failed to save secret');
@@ -289,7 +283,7 @@ const AddSecretSheet = ({ open, onOpenChange, defaultKeyId }: AddSecretSheetProp
                 {isSaving ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Encrypting...
+                    Saving to relay...
                   </>
                 ) : (
                   <>
