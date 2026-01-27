@@ -680,11 +680,12 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
                             </span>
                           )}
                         </div>
-                        {lastDecryptedTime && (
-                          <p className="text-[10px] text-foreground/60 font-light mt-1">
-                            Last opened {formatRelativeTime(lastDecryptedTime)}
-                          </p>
-                        )}
+                        <p className="text-[10px] text-foreground/60 font-light mt-1">
+                          {lastDecryptedTime 
+                            ? `Last opened ${formatRelativeTime(lastDecryptedTime)}`
+                            : `Created ${formatRelativeTime(secret.createdAt.getTime())}`
+                          }
+                        </p>
                       </div>
                       <div className="flex flex-col items-center gap-1 shrink-0 ml-3">
                         <Lock className="w-5 h-5 text-muted-foreground" />
