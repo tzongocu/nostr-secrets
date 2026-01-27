@@ -34,6 +34,7 @@ interface VaultContextValue {
   logs: SignLog[];
   defaultKeyId: string | null;
   deletedSecretIds: string[];
+  lastDecrypted: Record<string, number>;
   currentPin: string | null; // Exposed for biometric registration
   setupPin: (pin: string) => Promise<void>;
   unlock: (pin: string) => Promise<boolean>;
@@ -49,6 +50,7 @@ interface VaultContextValue {
   markDeleted: (eventId: string) => Promise<void>;
   unmarkDeleted: (eventId: string) => Promise<void>;
   clearDeletedSecrets: () => Promise<void>;
+  markDecrypted: (eventId: string) => Promise<void>;
   resetVault: () => void;
   enablePin: (pin: string) => Promise<void>;
   turnOffPin: () => void;
@@ -63,7 +65,7 @@ export const useVault = () => {
   return ctx;
 };
 
-const emptyVault: VaultData = { keys: [], logs: [], deletedSecretIds: [] };
+const emptyVault: VaultData = { keys: [], logs: [], deletedSecretIds: [], lastDecrypted: {} };
 
 export const VaultProvider = ({ children }: { children: ReactNode }) => {
   const initialSettings = getVaultSettings();
@@ -319,6 +321,21 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
     [persist, pinEnabled, pin]
   );
 
+  const markDecrypted = useCallback(
+    async (eventId: string) => {
+      if (pinEnabled && !pin) return;
+
+      const base: VaultData = dataRef.current ?? emptyVault;
+      const existing = base.lastDecrypted ?? {};
+      const next: VaultData = { 
+        ...base, 
+        lastDecrypted: { ...existing, [eventId]: Date.now() } 
+      };
+      await persist(next);
+    },
+    [persist, pinEnabled, pin]
+  );
+
   const resetVault = useCallback(() => {
     // Clear biometrics credentials when resetting vault
     disableBiometrics();
@@ -395,6 +412,7 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
         logs: data?.logs ?? [],
         defaultKeyId: data?.defaultKeyId ?? null,
         deletedSecretIds: data?.deletedSecretIds ?? [],
+        lastDecrypted: data?.lastDecrypted ?? {},
         currentPin: pin,
         setupPin,
         unlock,
@@ -410,6 +428,7 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
         markDeleted,
         unmarkDeleted,
         clearDeletedSecrets,
+        markDecrypted,
         resetVault,
         enablePin,
         turnOffPin,
