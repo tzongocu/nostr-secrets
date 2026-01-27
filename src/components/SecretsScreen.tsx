@@ -5,7 +5,6 @@ import { getStoredTags, type Tag as TagType } from '@/lib/secretStore';
 import { KEY_COLORS } from '@/lib/keyStore';
 import { decryptNIP04, npubToHex } from '@/lib/nostrRelay';
 import { useRelaySecrets } from '@/hooks/useRelaySecrets';
-import { getDeletedSecretIds, markSecretAsDeleted, unmarkSecretAsDeleted } from '@/lib/deletedSecretsStore';
 import { toast } from 'sonner';
 import logoN from '@/assets/logo-n.png';
 import AddSecretSheet from './AddSecretSheet';
@@ -140,7 +139,7 @@ interface SecretsScreenProps {
 }
 
 const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
-  const { keys, defaultKeyId, setDefaultKey } = useVault();
+  const { keys, defaultKeyId, setDefaultKey, deletedSecretIds, markDeleted, unmarkDeleted } = useVault();
   const { secrets, isLoading, isConnected, error, refresh, deleteSecret } = useRelaySecrets(keys);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -153,7 +152,6 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
   const [showSelector, setShowSelector] = useState(false);
   const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null);
   const [showDeleted, setShowDeleted] = useState(false);
-  const [deletedIds, setDeletedIds] = useState<string[]>(() => getDeletedSecretIds());
   const [deletedSearchQuery, setDeletedSearchQuery] = useState('');
   const selectorRef = useRef<HTMLDivElement>(null);
   const allTags = getStoredTags();
@@ -225,7 +223,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
       if (secret.keyId !== displayKey.id) return false;
       
       // Exclude soft-deleted secrets from main view
-      if (deletedIds.includes(secret.eventId)) return false;
+      if (deletedSecretIds.includes(secret.eventId)) return false;
       
       const matchesSearch = searchQuery === '' || 
         secret.title.toLowerCase().includes(searchQuery.toLowerCase());
@@ -235,7 +233,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
       
       return matchesSearch && matchesTags;
     });
-  }, [secrets, displayKey, searchQuery, selectedTags, deletedIds]);
+  }, [secrets, displayKey, searchQuery, selectedTags, deletedSecretIds]);
 
   // Get deleted secrets for current key (with search filter)
   const deletedSecrets = useMemo(() => {
@@ -243,7 +241,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
     
     return secrets.filter(secret => {
       if (secret.keyId !== displayKey.id) return false;
-      if (!deletedIds.includes(secret.eventId)) return false;
+      if (!deletedSecretIds.includes(secret.eventId)) return false;
       
       // Apply search filter
       if (deletedSearchQuery) {
@@ -251,13 +249,13 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
       }
       return true;
     });
-  }, [secrets, displayKey, deletedIds, deletedSearchQuery]);
+  }, [secrets, displayKey, deletedSecretIds, deletedSearchQuery]);
 
   // Total deleted count (before search filter)
   const totalDeletedCount = useMemo(() => {
     if (!displayKey) return 0;
-    return secrets.filter(s => s.keyId === displayKey.id && deletedIds.includes(s.eventId)).length;
-  }, [secrets, displayKey, deletedIds]);
+    return secrets.filter(s => s.keyId === displayKey.id && deletedSecretIds.includes(s.eventId)).length;
+  }, [secrets, displayKey, deletedSecretIds]);
 
   const handleSelectKey = (id: string) => {
     setSelectedKeyId(id);
@@ -349,9 +347,8 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
       // Try to delete from relay (NIP-09)
       const success = await deleteSecret(secret.eventId, key);
       
-      // Always mark as soft-deleted locally
-      markSecretAsDeleted(secret.eventId);
-      setDeletedIds(getDeletedSecretIds());
+      // Always mark as soft-deleted locally (now in encrypted vault)
+      await markDeleted(secret.eventId);
       
       if (success) {
         toast.success('Secret deleted from relay');
@@ -363,8 +360,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
     } catch (e) {
       console.error('Delete error:', e);
       // Still soft-delete locally
-      markSecretAsDeleted(secret.eventId);
-      setDeletedIds(getDeletedSecretIds());
+      await markDeleted(secret.eventId);
       toast.success('Secret marked as deleted locally');
     } finally {
       setIsDeleting(false);
@@ -372,9 +368,8 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
     }
   };
 
-  const handleRestore = (eventId: string) => {
-    unmarkSecretAsDeleted(eventId);
-    setDeletedIds(getDeletedSecretIds());
+  const handleRestore = async (eventId: string) => {
+    await unmarkDeleted(eventId);
     toast.success('Secret restored');
   };
 
@@ -394,7 +389,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
   };
 
   // Count excludes deleted secrets
-  const secretsCount = displayKey ? secrets.filter(s => s.keyId === displayKey.id && !deletedIds.includes(s.eventId)).length : 0;
+  const secretsCount = displayKey ? secrets.filter(s => s.keyId === displayKey.id && !deletedSecretIds.includes(s.eventId)).length : 0;
 
   return (
     <div className="h-full flex flex-col">
