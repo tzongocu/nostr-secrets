@@ -145,7 +145,7 @@ const AddSecretSheet = ({ open, onOpenChange, defaultKeyId }: AddSecretSheetProp
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[90vh] rounded-t-3xl px-0">
+      <SheetContent side="bottom" className="h-[90vh] rounded-t-3xl px-0 sm:max-w-md sm:mx-auto sm:left-0 sm:right-0">
         <div className="max-w-md mx-auto px-6 h-full flex flex-col">
           <SheetHeader className="pb-4 shrink-0">
             <SheetTitle className="flex items-center gap-2">
