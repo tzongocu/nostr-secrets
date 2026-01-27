@@ -8,7 +8,7 @@ import { NativeBiometric, BiometryType } from 'capacitor-native-biometric';
 import { Capacitor } from '@capacitor/core';
 
 const BIOMETRICS_ENABLED_KEY = 'nostr-vault-biometrics-enabled';
-const CREDENTIALS_SERVER = 'nostr-authenticator-vault';
+const CREDENTIALS_SERVER = 'nostr-secrets-vault';
 
 export const isBiometricsSupported = (): boolean => {
   return true;

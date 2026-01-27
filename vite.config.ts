@@ -17,9 +17,9 @@ export default defineConfig(({ mode }) => ({
       registerType: "autoUpdate",
       includeAssets: ["favicon.png", "robots.txt"],
       manifest: {
-        name: "Nostr Authenticator",
-        short_name: "Nostr Auth",
-        description: "Secure Nostr key wallet for signing messages",
+        name: "Nostr Secrets Vault",
+        short_name: "Nostr Secrets",
+        description: "Secure encrypted password vault built on Nostr",
         theme_color: "#1a0a2e",
         background_color: "#1a0a2e",
         display: "standalone",
