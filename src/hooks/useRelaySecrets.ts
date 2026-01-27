@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchSecretsFromRelays, deleteSecretFromRelays, type RelaySecret } from '@/lib/relaySecrets';
+import { fetchSecretsFromRelays, deleteSecretFromRelays, type RelaySecret, type OnSecretsUpdate } from '@/lib/relaySecrets';
 import type { NostrKey } from '@/lib/keyStore';
 
 interface UseRelaySecretsResult {
@@ -18,6 +18,7 @@ export const useRelaySecrets = (keys: NostrKey[]): UseRelaySecretsResult => {
   const [error, setError] = useState<string | null>(null);
   const lastFetchRef = useRef<number>(0);
   const keysRef = useRef<NostrKey[]>(keys);
+  const isFetchingRef = useRef(false);
 
   // Update keys ref
   useEffect(() => {
@@ -34,19 +35,40 @@ export const useRelaySecrets = (keys: NostrKey[]): UseRelaySecretsResult => {
       return;
     }
 
+    // Prevent concurrent fetches
+    if (isFetchingRef.current) {
+      return;
+    }
+
     // Debounce - don't fetch more than once per second
     const now = Date.now();
     if (now - lastFetchRef.current < 1000) {
       return;
     }
     lastFetchRef.current = now;
+    isFetchingRef.current = true;
 
     setIsLoading(true);
     setError(null);
 
-    try {
-      const result = await fetchSecretsFromRelays(currentKeys);
+    // Streaming callback - updates UI as each relay responds
+    const onUpdate: OnSecretsUpdate = (updatedSecrets, isComplete) => {
+      setSecrets(updatedSecrets);
       
+      if (updatedSecrets.length > 0) {
+        setIsConnected(true);
+      }
+      
+      if (isComplete) {
+        setIsLoading(false);
+        isFetchingRef.current = false;
+      }
+    };
+
+    try {
+      const result = await fetchSecretsFromRelays(currentKeys, onUpdate);
+      
+      // Final state update (in case no updates came through)
       setSecrets(result.secrets);
       setIsConnected(result.secrets.length > 0 || result.errors.length === 0);
       
@@ -59,6 +81,7 @@ export const useRelaySecrets = (keys: NostrKey[]): UseRelaySecretsResult => {
       setIsConnected(false);
     } finally {
       setIsLoading(false);
+      isFetchingRef.current = false;
     }
   }, []);
 
@@ -74,6 +97,7 @@ export const useRelaySecrets = (keys: NostrKey[]): UseRelaySecretsResult => {
 
   const refresh = useCallback(async () => {
     lastFetchRef.current = 0; // Reset debounce
+    isFetchingRef.current = false; // Allow new fetch
     await fetchSecrets();
   }, [fetchSecrets]);
 
