@@ -1,9 +1,10 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, ChevronDown, ChevronUp, RefreshCw, Loader2, WifiOff } from 'lucide-react';
 import { useVault } from '@/context/VaultContext';
-import { getStoredTags, type Secret, type Tag as TagType } from '@/lib/secretStore';
+import { getStoredTags, type Tag as TagType } from '@/lib/secretStore';
 import { KEY_COLORS } from '@/lib/keyStore';
 import { decryptNIP04, npubToHex } from '@/lib/nostrRelay';
+import { useRelaySecrets } from '@/hooks/useRelaySecrets';
 import { toast } from 'sonner';
 import logoN from '@/assets/logo-n.png';
 import AddSecretSheet from './AddSecretSheet';
@@ -138,7 +139,8 @@ interface SecretsScreenProps {
 }
 
 const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
-  const { keys, secrets, removeSecret, defaultKeyId, setDefaultKey } = useVault();
+  const { keys, defaultKeyId, setDefaultKey } = useVault();
+  const { secrets, isLoading, isConnected, error, refresh, deleteSecret } = useRelaySecrets(keys);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showAddSheet, setShowAddSheet] = useState(false);
@@ -146,6 +148,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
   const [decryptedSecrets, setDecryptedSecrets] = useState<Record<string, string>>({});
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [deleteSecretId, setDeleteSecretId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [showSelector, setShowSelector] = useState(false);
   const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null);
   const selectorRef = useRef<HTMLDivElement>(null);
@@ -209,11 +212,6 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
     return allTags.filter(tag => usedTagIds.has(tag.id));
   }, [secrets, displayKey, allTags]);
 
-  // Find orphaned secrets (secrets whose key no longer exists)
-  const orphanedSecrets = useMemo(() => {
-    return secrets.filter(secret => !keys.find(k => k.id === secret.keyId));
-  }, [secrets, keys]);
-
   // Filter secrets by selected key, search, and tags
   const filteredSecrets = useMemo(() => {
     if (!displayKey) return [];
@@ -257,7 +255,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
     );
   };
 
-  const handleDecrypt = useCallback(async (secret: Secret) => {
+  const handleDecrypt = useCallback(async (secret: { id: string; keyId: string; encryptedContent: string }) => {
     const key = keys.find(k => k.id === secret.keyId);
     if (!key) {
       toast.error('Key not found');
@@ -302,9 +300,42 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
 
   const handleDelete = async () => {
     if (!deleteSecretId) return;
-    await removeSecret(deleteSecretId);
-    setDeleteSecretId(null);
-    toast.success('Secret deleted');
+    
+    const secret = secrets.find(s => s.id === deleteSecretId);
+    if (!secret) {
+      setDeleteSecretId(null);
+      return;
+    }
+
+    const key = keys.find(k => k.id === secret.keyId);
+    if (!key) {
+      toast.error('Key not found - cannot delete from relay');
+      setDeleteSecretId(null);
+      return;
+    }
+
+    setIsDeleting(true);
+    
+    try {
+      const success = await deleteSecret(secret.eventId, key);
+      
+      if (success) {
+        toast.success('Secret deleted from relay');
+      } else {
+        toast.error('Failed to delete from relay');
+      }
+    } catch (e) {
+      console.error('Delete error:', e);
+      toast.error('Delete failed');
+    } finally {
+      setIsDeleting(false);
+      setDeleteSecretId(null);
+    }
+  };
+
+  const handleRefresh = async () => {
+    await refresh();
+    toast.success('Secrets refreshed');
   };
 
   const getTagColor = (tagId: string): string => {
@@ -328,6 +359,20 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
           <h1 className="text-xl font-bold text-foreground">
             Nostr <span className="text-primary">Secrets</span>
           </h1>
+          <div className="ml-auto flex items-center gap-2">
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+            ) : !isConnected && keys.length > 0 ? (
+              <WifiOff className="w-4 h-4 text-destructive" />
+            ) : null}
+            <button
+              onClick={handleRefresh}
+              disabled={isLoading || keys.length === 0}
+              className="p-2 hover:bg-primary/10 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 text-muted-foreground ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -386,6 +431,20 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
           )}
         </div>
 
+        {/* Connection Error */}
+        {error && keys.length > 0 && (
+          <div className="mb-4 p-3 rounded-xl bg-destructive/10 border border-destructive/30 flex items-center gap-2">
+            <WifiOff className="w-4 h-4 text-destructive shrink-0" />
+            <span className="text-sm text-destructive">{error}</span>
+            <button
+              onClick={handleRefresh}
+              className="ml-auto text-xs text-destructive hover:underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Search Bar */}
         <div className="relative mb-3">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -432,8 +491,13 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
           ))}
         </div>
 
-        {/* Secrets List */}
-        {keys.length === 0 ? (
+        {/* Loading State */}
+        {isLoading && secrets.length === 0 ? (
+          <div className="text-center py-12">
+            <Loader2 className="w-16 h-16 text-primary mx-auto mb-4 animate-spin" />
+            <p className="text-muted-foreground">Loading secrets from relays...</p>
+          </div>
+        ) : keys.length === 0 ? (
           <div className="text-center py-12">
             <Key className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
             <p className="text-muted-foreground">Add a key first</p>
@@ -443,7 +507,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
           <div className="text-center py-12">
             <Lock className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
             <p className="text-muted-foreground">
-              {secretsCount === 0 ? 'No secrets yet' : 'No matching secrets'}
+              {secretsCount === 0 ? 'No secrets on relay' : 'No matching secrets'}
             </p>
             <p className="text-xs text-muted-foreground mt-2">
               {secretsCount === 0 ? 'Tap + to add your first secret' : 'Try a different search or filter'}
@@ -560,40 +624,6 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
             })}
           </div>
         )}
-
-        {/* Orphaned Secrets Warning */}
-        {orphanedSecrets.length > 0 && (
-          <div className="mt-6">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="w-4 h-4 text-destructive" />
-              <span className="text-sm font-medium text-destructive">
-                Orphaned Secrets ({orphanedSecrets.length})
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground mb-3">
-              These secrets belong to keys that no longer exist. You can delete them or the data may be unrecoverable.
-            </p>
-            <div className="space-y-2">
-              {orphanedSecrets.map((secret) => (
-                <div
-                  key={secret.id}
-                  className="glass-card rounded-xl p-3 border border-destructive/30 flex items-center justify-between"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">{secret.title}</p>
-                    <p className="text-xs text-muted-foreground">Key missing: {secret.keyId.slice(0, 8)}...</p>
-                  </div>
-                  <button
-                    onClick={() => setDeleteSecretId(secret.id)}
-                    className="p-2 hover:bg-destructive/20 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Add Secret Sheet */}
@@ -601,24 +631,33 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
         open={showAddSheet} 
         onOpenChange={setShowAddSheet}
         defaultKeyId={displayKey?.id}
+        onSecretSaved={refresh}
       />
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!deleteSecretId} onOpenChange={() => setDeleteSecretId(null)}>
+      <AlertDialog open={!!deleteSecretId} onOpenChange={() => !isDeleting && setDeleteSecretId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Secret</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this secret? This action cannot be undone.
+              Are you sure you want to delete this secret? This will send a deletion request to all relays.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleDelete}
+              disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
