@@ -145,15 +145,16 @@ const AddSecretSheet = ({ open, onOpenChange, defaultKeyId }: AddSecretSheetProp
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[90vh] rounded-t-3xl max-w-md mx-auto">
-        <SheetHeader className="pb-4">
-          <SheetTitle className="flex items-center gap-2">
-            <Lock className="w-5 h-5 text-primary" />
-            Add Secret
-          </SheetTitle>
-        </SheetHeader>
+      <SheetContent side="bottom" className="h-[90vh] rounded-t-3xl px-0">
+        <div className="max-w-md mx-auto px-6 h-full flex flex-col">
+          <SheetHeader className="pb-4 shrink-0">
+            <SheetTitle className="flex items-center gap-2">
+              <Lock className="w-5 h-5 text-primary" />
+              Add Secret
+            </SheetTitle>
+          </SheetHeader>
 
-        <div className="space-y-4 overflow-y-auto pb-20">
+          <div className="space-y-4 overflow-y-auto pb-24 flex-1">
           {/* Title */}
           <div>
             <label className="text-sm text-muted-foreground mb-1.5 block">Title</label>
@@ -302,27 +303,30 @@ const AddSecretSheet = ({ open, onOpenChange, defaultKeyId }: AddSecretSheetProp
               />
             </button>
           </div>
-        </div>
+          </div>
 
-        {/* Save Button - Fixed at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-background border-t border-border">
-          <button
-            onClick={handleSave}
-            disabled={isSaving || !title.trim() || !content.trim()}
-            className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-medium neon-glow transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Encrypting...
-              </>
-            ) : (
-              <>
-                <Lock className="w-5 h-5" />
-                Save Secret
-              </>
-            )}
-          </button>
+          {/* Save Button - Fixed at bottom */}
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-background border-t border-border">
+            <div className="max-w-md mx-auto">
+              <button
+                onClick={handleSave}
+                disabled={isSaving || !title.trim() || !content.trim()}
+                className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-medium neon-glow transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Encrypting...
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-5 h-5" />
+                    Save Secret
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       </SheetContent>
     </Sheet>
