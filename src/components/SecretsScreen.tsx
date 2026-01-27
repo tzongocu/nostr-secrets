@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, ChevronDown, ChevronUp, RefreshCw, Loader2, WifiOff, RotateCcw, Archive, Radio, CloudOff, CloudUpload } from 'lucide-react';
+import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, ChevronDown, ChevronUp, RefreshCw, Loader2, WifiOff, RotateCcw, Archive, Radio, CloudOff, CloudUpload, Clock } from 'lucide-react';
 import { useVault } from '@/context/VaultContext';
 import { getStoredTags, type Tag as TagType } from '@/lib/secretStore';
 import { KEY_COLORS } from '@/lib/keyStore';
@@ -142,7 +142,7 @@ interface SecretsScreenProps {
 }
 
 const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
-  const { keys, defaultKeyId, setDefaultKey, deletedSecretIds, markDeleted, unmarkDeleted } = useVault();
+  const { keys, defaultKeyId, setDefaultKey, deletedSecretIds, markDeleted, unmarkDeleted, lastDecrypted, markDecrypted } = useVault();
   const { secrets, isLoading, isConnected, error, refresh, deleteSecret } = useRelaySecrets(keys);
   const { queue: offlineQueue, count: offlineCount, retryAll: retryOfflineQueue, hydrateKeys } = useOfflineQueue();
   const { needsSync, isRunning: isSyncing, syncAll } = useRelaySync(secrets, keys);
@@ -328,6 +328,8 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
 
       if (decrypted) {
         setDecryptedSecrets(prev => ({ ...prev, [secret.id]: decrypted }));
+        // Track last decrypted time
+        markDecrypted(secret.id);
         toast.success('Secret decrypted');
       } else {
         toast.error('Failed to decrypt');
@@ -336,7 +338,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
       console.error('Decrypt error:', e);
       toast.error('Decryption failed');
     }
-  }, [keys]);
+  }, [keys, markDecrypted]);
 
   const handleHide = (secretId: string) => {
     setDecryptedSecrets(prev => {
@@ -618,6 +620,22 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
               const isDecrypted = !!decryptedSecrets[secret.id];
               const decryptedContent = decryptedSecrets[secret.id];
               const isExpanded = expandedSecretId === secret.id;
+              const lastDecryptedTime = lastDecrypted[secret.id];
+
+              // Format relative time
+              const formatRelativeTime = (timestamp: number): string => {
+                const now = Date.now();
+                const diff = now - timestamp;
+                const minutes = Math.floor(diff / 60000);
+                const hours = Math.floor(diff / 3600000);
+                const days = Math.floor(diff / 86400000);
+                
+                if (minutes < 1) return 'just now';
+                if (minutes < 60) return `${minutes}m ago`;
+                if (hours < 24) return `${hours}h ago`;
+                if (days < 7) return `${days}d ago`;
+                return new Date(timestamp).toLocaleDateString();
+              };
 
               return (
                 <div
@@ -659,6 +677,12 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
                           {secret.tags.length > 2 && (
                             <span className="text-xs text-muted-foreground">
                               +{secret.tags.length - 2}
+                            </span>
+                          )}
+                          {lastDecryptedTime && (
+                            <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 ml-auto">
+                              <Clock className="w-3 h-3" />
+                              {formatRelativeTime(lastDecryptedTime)}
                             </span>
                           )}
                         </div>
