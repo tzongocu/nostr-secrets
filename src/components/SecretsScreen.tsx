@@ -1,10 +1,11 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, ChevronDown, ChevronUp, RefreshCw, Loader2, WifiOff } from 'lucide-react';
+import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, ChevronDown, ChevronUp, RefreshCw, Loader2, WifiOff, RotateCcw, Archive } from 'lucide-react';
 import { useVault } from '@/context/VaultContext';
 import { getStoredTags, type Tag as TagType } from '@/lib/secretStore';
 import { KEY_COLORS } from '@/lib/keyStore';
 import { decryptNIP04, npubToHex } from '@/lib/nostrRelay';
 import { useRelaySecrets } from '@/hooks/useRelaySecrets';
+import { getDeletedSecretIds, markSecretAsDeleted, unmarkSecretAsDeleted } from '@/lib/deletedSecretsStore';
 import { toast } from 'sonner';
 import logoN from '@/assets/logo-n.png';
 import AddSecretSheet from './AddSecretSheet';
@@ -151,6 +152,8 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showSelector, setShowSelector] = useState(false);
   const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [deletedIds, setDeletedIds] = useState<string[]>(() => getDeletedSecretIds());
   const selectorRef = useRef<HTMLDivElement>(null);
   const allTags = getStoredTags();
 
@@ -212,13 +215,16 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
     return allTags.filter(tag => usedTagIds.has(tag.id));
   }, [secrets, displayKey, allTags]);
 
-  // Filter secrets by selected key, search, and tags
+  // Filter secrets by selected key, search, tags, AND exclude deleted ones
   const filteredSecrets = useMemo(() => {
     if (!displayKey) return [];
     
     return secrets.filter(secret => {
       // Must belong to selected key
       if (secret.keyId !== displayKey.id) return false;
+      
+      // Exclude soft-deleted secrets from main view
+      if (deletedIds.includes(secret.eventId)) return false;
       
       const matchesSearch = searchQuery === '' || 
         secret.title.toLowerCase().includes(searchQuery.toLowerCase());
@@ -228,7 +234,16 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
       
       return matchesSearch && matchesTags;
     });
-  }, [secrets, displayKey, searchQuery, selectedTags]);
+  }, [secrets, displayKey, searchQuery, selectedTags, deletedIds]);
+
+  // Get deleted secrets for current key
+  const deletedSecrets = useMemo(() => {
+    if (!displayKey) return [];
+    
+    return secrets.filter(secret => 
+      secret.keyId === displayKey.id && deletedIds.includes(secret.eventId)
+    );
+  }, [secrets, displayKey, deletedIds]);
 
   const handleSelectKey = (id: string) => {
     setSelectedKeyId(id);
@@ -317,20 +332,36 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
     setIsDeleting(true);
     
     try {
+      // Try to delete from relay (NIP-09)
       const success = await deleteSecret(secret.eventId, key);
+      
+      // Always mark as soft-deleted locally
+      markSecretAsDeleted(secret.eventId);
+      setDeletedIds(getDeletedSecretIds());
       
       if (success) {
         toast.success('Secret deleted from relay');
       } else {
-        toast.error('Failed to delete from relay');
+        toast.success('Secret marked as deleted', {
+          description: 'Relay deletion failed, but hidden locally'
+        });
       }
     } catch (e) {
       console.error('Delete error:', e);
-      toast.error('Delete failed');
+      // Still soft-delete locally
+      markSecretAsDeleted(secret.eventId);
+      setDeletedIds(getDeletedSecretIds());
+      toast.success('Secret marked as deleted locally');
     } finally {
       setIsDeleting(false);
       setDeleteSecretId(null);
     }
+  };
+
+  const handleRestore = (eventId: string) => {
+    unmarkSecretAsDeleted(eventId);
+    setDeletedIds(getDeletedSecretIds());
+    toast.success('Secret restored');
   };
 
   const handleRefresh = async () => {
@@ -348,7 +379,8 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
     return tag?.name || tagId;
   };
 
-  const secretsCount = displayKey ? secrets.filter(s => s.keyId === displayKey.id).length : 0;
+  // Count excludes deleted secrets
+  const secretsCount = displayKey ? secrets.filter(s => s.keyId === displayKey.id && !deletedIds.includes(s.eventId)).length : 0;
 
   return (
     <div className="h-full flex flex-col">
@@ -622,6 +654,49 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Deleted Secrets Section */}
+        {deletedSecrets.length > 0 && (
+          <div className="mt-6">
+            <button
+              onClick={() => setShowDeleted(!showDeleted)}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-3 transition-colors"
+            >
+              <Archive className="w-4 h-4" />
+              <span>Deleted ({deletedSecrets.length})</span>
+              <ChevronDown className={`w-4 h-4 transition-transform ${showDeleted ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {showDeleted && (
+              <div className="space-y-2">
+                {deletedSecrets.map((secret) => (
+                  <div
+                    key={secret.id}
+                    className="glass-card rounded-xl border border-border/30 overflow-hidden opacity-60"
+                  >
+                    <div className="p-3 flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-foreground truncate text-sm line-through">
+                          {secret.title}
+                        </h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Marked as deleted
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleRestore(secret.eventId)}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors text-xs"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Restore
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
