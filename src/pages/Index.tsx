@@ -90,15 +90,40 @@ const Index = () => {
     };
   }, [pinEnabled, isUnlocked, resetInactivityTimer]);
 
+  const touchStartY = useRef<number>(0);
+  const isHorizontalSwipe = useRef<boolean | null>(null);
+
   const handleTouchStart = (e: TouchEvent) => {
     if (isTransitioning) return;
     touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
     touchCurrentX.current = e.touches[0].clientX;
+    isHorizontalSwipe.current = null; // Reset direction detection
   };
 
   const handleTouchMove = (e: TouchEvent) => {
     if (isTransitioning) return;
-    touchCurrentX.current = e.touches[0].clientX;
+    
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    
+    // Determine swipe direction on first significant movement
+    if (isHorizontalSwipe.current === null) {
+      const diffX = Math.abs(currentX - touchStartX.current);
+      const diffY = Math.abs(currentY - touchStartY.current);
+      
+      // Need at least 10px movement to determine direction
+      if (diffX > 10 || diffY > 10) {
+        isHorizontalSwipe.current = diffX > diffY;
+      }
+    }
+    
+    // Only handle horizontal swipes for tab navigation
+    if (isHorizontalSwipe.current !== true) {
+      return; // Let vertical scrolling happen normally
+    }
+    
+    touchCurrentX.current = currentX;
     const diff = touchCurrentX.current - touchStartX.current;
     
     // Limit swipe to prevent going past edges
@@ -112,6 +137,12 @@ const Index = () => {
 
   const handleTouchEnd = () => {
     if (isTransitioning) return;
+    
+    // Only process if this was a horizontal swipe
+    if (isHorizontalSwipe.current !== true) {
+      isHorizontalSwipe.current = null;
+      return;
+    }
     
     const diff = touchCurrentX.current - touchStartX.current;
     const currentIndex = TABS.indexOf(activeTab);
@@ -129,6 +160,7 @@ const Index = () => {
     }
     
     setSwipeOffset(0);
+    isHorizontalSwipe.current = null;
     setTimeout(() => setIsTransitioning(false), 300);
   };
 
