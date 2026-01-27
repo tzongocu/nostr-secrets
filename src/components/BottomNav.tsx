@@ -1,6 +1,6 @@
-import { Shield, Key, History, Settings } from 'lucide-react';
+import { Lock, Key, Settings } from 'lucide-react';
 
-type Tab = 'dashboard' | 'keys' | 'history' | 'settings';
+type Tab = 'secrets' | 'keys' | 'settings';
 
 interface BottomNavProps {
   activeTab: Tab;
@@ -8,10 +8,9 @@ interface BottomNavProps {
 }
 
 const BottomNav = ({ activeTab, onTabChange }: BottomNavProps) => {
-  const tabs: { id: Tab; icon: typeof Shield; label: string }[] = [
-    { id: 'dashboard', icon: Shield, label: 'AUTH' },
+  const tabs: { id: Tab; icon: typeof Lock; label: string }[] = [
+    { id: 'secrets', icon: Lock, label: 'SECRETS' },
     { id: 'keys', icon: Key, label: 'KEYS' },
-    { id: 'history', icon: History, label: 'HISTORY' },
     { id: 'settings', icon: Settings, label: 'SETTINGS' },
   ];
 
@@ -22,7 +21,7 @@ const BottomNav = ({ activeTab, onTabChange }: BottomNavProps) => {
           <button
             key={id}
             onClick={() => onTabChange(id)}
-            className={`flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-all ${
+            className={`flex flex-col items-center gap-1 py-2 px-6 rounded-xl transition-all ${
               activeTab === id
                 ? 'text-primary'
                 : 'text-muted-foreground hover:text-foreground'
