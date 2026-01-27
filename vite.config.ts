@@ -47,7 +47,18 @@ export default defineConfig(({ mode }) => ({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        // Skip large source maps
+        globIgnores: ["**/*.map"],
+        // Precache critical assets
+        additionalManifestEntries: [
+          { url: "/", revision: Date.now().toString() },
+        ],
         runtimeCaching: [
+          {
+            // Cache relay connections info
+            urlPattern: /^wss:\/\/.*/i,
+            handler: "NetworkOnly",
+          },
           {
             urlPattern: /^https:\/\/.*\.r2\.dev\/.*/i,
             handler: "CacheFirst",
@@ -60,6 +71,11 @@ export default defineConfig(({ mode }) => ({
             },
           },
         ],
+        // Clean old caches
+        cleanupOutdatedCaches: true,
+        // Skip waiting for faster updates
+        skipWaiting: true,
+        clientsClaim: true,
       },
     }),
   ].filter(Boolean),
@@ -71,14 +87,44 @@ export default defineConfig(({ mode }) => ({
   build: {
     target: "esnext",
     minify: "esbuild",
+    // Optimize chunk size
+    chunkSizeWarningLimit: 500,
+    cssCodeSplit: true,
+    // Source maps only in dev
+    sourcemap: mode === "development",
     rollupOptions: {
       output: {
+        // Optimize chunk names for caching
+        chunkFileNames: "assets/[name]-[hash].js",
+        entryFileNames: "assets/[name]-[hash].js",
+        assetFileNames: "assets/[name]-[hash].[ext]",
         manualChunks: {
-          vendor: ["react", "react-dom", "react-router-dom"],
-          crypto: ["@noble/secp256k1", "@scure/base"],
-          ui: ["@radix-ui/react-dialog", "@radix-ui/react-collapsible", "@radix-ui/react-select"],
+          // Core React
+          "vendor-react": ["react", "react-dom"],
+          // Router separate for better caching
+          "vendor-router": ["react-router-dom"],
+          // Crypto libs (heavy but rarely change)
+          "vendor-crypto": ["@noble/secp256k1", "@scure/base"],
+          // UI components
+          "vendor-radix": [
+            "@radix-ui/react-dialog",
+            "@radix-ui/react-collapsible",
+            "@radix-ui/react-select",
+            "@radix-ui/react-tabs",
+            "@radix-ui/react-toast",
+            "@radix-ui/react-tooltip",
+          ],
         },
       },
     },
+  },
+  // Optimize deps
+  optimizeDeps: {
+    include: ["react", "react-dom", "react-router-dom", "@noble/secp256k1"],
+    exclude: ["@vite/client"],
+  },
+  // Enable CSS optimization
+  css: {
+    devSourcemap: false,
   },
 }));
