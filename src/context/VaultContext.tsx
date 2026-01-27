@@ -21,6 +21,7 @@ import {
   type VaultData,
 } from '@/lib/vault';
 import type { NostrKey, SignLog } from '@/lib/keyStore';
+import type { Secret } from '@/lib/secretStore';
 import { disableBiometrics, storeCredentials, isBiometricsEnabled } from '@/hooks/useBiometrics';
 
 interface VaultContextValue {
@@ -29,6 +30,7 @@ interface VaultContextValue {
   isUnlocked: boolean;
   keys: NostrKey[];
   logs: SignLog[];
+  secrets: Secret[];
   defaultKeyId: string | null;
   currentPin: string | null; // Exposed for biometric registration
   setupPin: (pin: string) => Promise<void>;
@@ -41,6 +43,9 @@ interface VaultContextValue {
   removeKey: (id: string) => Promise<void>;
   addLog: (log: SignLog) => Promise<void>;
   clearLogs: () => Promise<void>;
+  addSecret: (secret: Secret) => Promise<void>;
+  updateSecret: (secret: Secret) => Promise<void>;
+  removeSecret: (id: string) => Promise<void>;
   setDefaultKey: (id: string | null) => Promise<void>;
   resetVault: () => void;
   enablePin: (pin: string) => Promise<void>;
@@ -54,6 +59,8 @@ export const useVault = () => {
   if (!ctx) throw new Error('useVault must be used inside VaultProvider');
   return ctx;
 };
+
+const emptyVault: VaultData = { keys: [], logs: [], secrets: [] };
 
 export const VaultProvider = ({ children }: { children: ReactNode }) => {
   const initialSettings = getVaultSettings();
@@ -103,10 +110,9 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
 
   const setupPin = useCallback(async (newPin: string) => {
     await createVault(newPin);
-    const empty: VaultData = { keys: [], logs: [] };
     setPin(newPin);
-    dataRef.current = empty;
-    setData(empty);
+    dataRef.current = emptyVault;
+    setData(emptyVault);
     setPinEnabled(true);
   }, []);
 
@@ -157,7 +163,7 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
       // When PIN is enabled, only allow writes while unlocked
       if (pinEnabled && !pin) return;
 
-      const base: VaultData = dataRef.current ?? { keys: [], logs: [] };
+      const base: VaultData = dataRef.current ?? emptyVault;
       const next: VaultData = { ...base, keys: [...base.keys, key] };
       await persist(next);
     },
@@ -168,7 +174,7 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
     async (key: NostrKey) => {
       if (pinEnabled && !pin) return;
 
-      const base: VaultData = dataRef.current ?? { keys: [], logs: [] };
+      const base: VaultData = dataRef.current ?? emptyVault;
       const next: VaultData = { ...base, keys: base.keys.map((k) => k.id === key.id ? key : k) };
       await persist(next);
     },
@@ -179,7 +185,7 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
     async (id: string) => {
       if (pinEnabled && !pin) return;
 
-      const base: VaultData = dataRef.current ?? { keys: [], logs: [] };
+      const base: VaultData = dataRef.current ?? emptyVault;
       const next: VaultData = { ...base, keys: base.keys.filter((k) => k.id !== id) };
       await persist(next);
     },
@@ -190,7 +196,7 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
     async (log: SignLog) => {
       if (pinEnabled && !pin) return;
 
-      const base: VaultData = dataRef.current ?? { keys: [], logs: [] };
+      const base: VaultData = dataRef.current ?? emptyVault;
       const next: VaultData = { ...base, logs: [log, ...base.logs].slice(0, 100) };
       await persist(next);
     },
@@ -201,8 +207,41 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
     async () => {
       if (pinEnabled && !pin) return;
 
-      const base: VaultData = dataRef.current ?? { keys: [], logs: [] };
+      const base: VaultData = dataRef.current ?? emptyVault;
       const next: VaultData = { ...base, logs: [] };
+      await persist(next);
+    },
+    [persist, pinEnabled, pin]
+  );
+
+  const addSecret = useCallback(
+    async (secret: Secret) => {
+      if (pinEnabled && !pin) return;
+
+      const base: VaultData = dataRef.current ?? emptyVault;
+      const next: VaultData = { ...base, secrets: [secret, ...base.secrets] };
+      await persist(next);
+    },
+    [persist, pinEnabled, pin]
+  );
+
+  const updateSecret = useCallback(
+    async (secret: Secret) => {
+      if (pinEnabled && !pin) return;
+
+      const base: VaultData = dataRef.current ?? emptyVault;
+      const next: VaultData = { ...base, secrets: base.secrets.map((s) => s.id === secret.id ? secret : s) };
+      await persist(next);
+    },
+    [persist, pinEnabled, pin]
+  );
+
+  const removeSecret = useCallback(
+    async (id: string) => {
+      if (pinEnabled && !pin) return;
+
+      const base: VaultData = dataRef.current ?? emptyVault;
+      const next: VaultData = { ...base, secrets: base.secrets.filter((s) => s.id !== id) };
       await persist(next);
     },
     [persist, pinEnabled, pin]
@@ -212,7 +251,7 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
     async (id: string | null) => {
       if (pinEnabled && !pin) return;
 
-      const base: VaultData = dataRef.current ?? { keys: [], logs: [] };
+      const base: VaultData = dataRef.current ?? emptyVault;
       const next: VaultData = { ...base, defaultKeyId: id ?? undefined };
       await persist(next);
     },
@@ -225,14 +264,13 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
     deleteVault();
     setPin(null);
     setPinEnabled(false);
-    const empty: VaultData = { keys: [], logs: [] };
-    dataRef.current = empty;
-    setData(empty);
+    dataRef.current = emptyVault;
+    setData(emptyVault);
   }, []);
 
   const enablePin = useCallback(
     async (newPin: string) => {
-      const currentData = dataRef.current ?? { keys: [], logs: [] };
+      const currentData = dataRef.current ?? emptyVault;
       await enablePinWithData(newPin, currentData);
       setPin(newPin);
       setPinEnabled(true);
@@ -267,6 +305,7 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
         isUnlocked,
         keys: data?.keys ?? [],
         logs: data?.logs ?? [],
+        secrets: data?.secrets ?? [],
         defaultKeyId: data?.defaultKeyId ?? null,
         currentPin: pin,
         setupPin,
@@ -279,6 +318,9 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
         removeKey,
         addLog,
         clearLogs,
+        addSecret,
+        updateSecret,
+        removeSecret,
         setDefaultKey,
         resetVault,
         enablePin,

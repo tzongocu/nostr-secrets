@@ -1,28 +1,27 @@
 import { useState, useRef, useEffect, useCallback, TouchEvent } from 'react';
 import { useVault } from '@/context/VaultContext';
 import PinScreen from '@/components/PinScreen';
-import Dashboard from '@/components/Dashboard';
+import SecretsScreen from '@/components/SecretsScreen';
 import KeysScreen from '@/components/KeysScreen';
-import HistoryScreen from '@/components/HistoryScreen';
 import SettingsScreen from '@/components/SettingsScreen';
 import BottomNav from '@/components/BottomNav';
 import background from '@/assets/background.png';
 
-type Tab = 'dashboard' | 'keys' | 'history' | 'settings';
+type Tab = 'secrets' | 'keys' | 'settings';
 
-const TABS: Tab[] = ['dashboard', 'keys', 'history', 'settings'];
+const TABS: Tab[] = ['secrets', 'keys', 'settings'];
 const SWIPE_THRESHOLD = 50;
 const INACTIVITY_TIMEOUT_MS = 30 * 1000; // 30 seconds
 
 const Index = () => {
   const { pinEnabled, isSetup, isUnlocked, lock } = useVault();
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [activeTab, setActiveTab] = useState<Tab>('secrets');
 
-  // Reset to dashboard on app visibility change (return to app)
+  // Reset to secrets on app visibility change (return to app)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        setActiveTab('dashboard');
+        setActiveTab('secrets');
       }
     };
     
@@ -146,6 +145,7 @@ const Index = () => {
   }
 
   const currentIndex = TABS.indexOf(activeTab);
+  const tabWidth = 100 / TABS.length;
 
   return (
     <div className="h-screen flex flex-col bg-background relative overflow-hidden">
@@ -173,20 +173,17 @@ const Index = () => {
         <div 
           className="flex h-full transition-transform duration-300 ease-out"
           style={{ 
-            width: '400%',
-            transform: `translateX(calc(-${currentIndex * 25}% + ${swipeOffset}px))`,
+            width: `${TABS.length * 100}%`,
+            transform: `translateX(calc(-${currentIndex * tabWidth}% + ${swipeOffset}px))`,
           }}
         >
-          <div className="h-full pb-20 px-0.5" style={{ width: '25%' }}>
-            <Dashboard />
+          <div className="h-full pb-20 px-0.5" style={{ width: `${tabWidth}%` }}>
+            <SecretsScreen isActive={activeTab === 'secrets'} />
           </div>
-          <div className="h-full pb-20 px-0.5" style={{ width: '25%' }}>
+          <div className="h-full pb-20 px-0.5" style={{ width: `${tabWidth}%` }}>
             <KeysScreen isActive={activeTab === 'keys'} />
           </div>
-          <div className="h-full pb-20 px-0.5" style={{ width: '25%' }}>
-            <HistoryScreen />
-          </div>
-          <div className="h-full pb-20 px-0.5" style={{ width: '25%' }}>
+          <div className="h-full pb-20 px-0.5" style={{ width: `${tabWidth}%` }}>
             <SettingsScreen 
               onLogout={lock} 
               onEnablePin={() => setShowPinSetup(true)} 

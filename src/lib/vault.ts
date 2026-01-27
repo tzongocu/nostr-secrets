@@ -5,10 +5,12 @@
  */
 
 import type { NostrKey, SignLog } from './keyStore';
+import type { Secret } from './secretStore';
 
 export interface VaultData {
   keys: NostrKey[];
   logs: SignLog[];
+  secrets: Secret[];
   defaultKeyId?: string;
 }
 
@@ -143,6 +145,12 @@ const decrypt = async (payload: string, key: CryptoKey): Promise<VaultData> => {
   return {
     keys: (parsed.keys ?? []).map((k: any) => ({ ...k, createdAt: new Date(k.createdAt) })),
     logs: (parsed.logs ?? []).map((l: any) => ({ ...l, timestamp: new Date(l.timestamp) })),
+    secrets: (parsed.secrets ?? []).map((s: any) => ({ 
+      ...s, 
+      createdAt: new Date(s.createdAt),
+      updatedAt: new Date(s.updatedAt),
+      syncedAt: s.syncedAt ? new Date(s.syncedAt) : undefined,
+    })),
     defaultKeyId: parsed.defaultKeyId,
   };
 };
@@ -154,6 +162,12 @@ const parseRawData = (json: string): VaultData => {
   return {
     keys: (parsed.keys ?? []).map((k: any) => ({ ...k, createdAt: new Date(k.createdAt) })),
     logs: (parsed.logs ?? []).map((l: any) => ({ ...l, timestamp: new Date(l.timestamp) })),
+    secrets: (parsed.secrets ?? []).map((s: any) => ({ 
+      ...s, 
+      createdAt: new Date(s.createdAt),
+      updatedAt: new Date(s.updatedAt),
+      syncedAt: s.syncedAt ? new Date(s.syncedAt) : undefined,
+    })),
     defaultKeyId: parsed.defaultKeyId,
   };
 };
@@ -162,11 +176,11 @@ export const loadUnencryptedVault = (): VaultData => {
   migrateLegacyStorageIfNeeded();
 
   const stored = localStorage.getItem(PLAIN_STORAGE_KEY);
-  if (!stored) return { keys: [], logs: [] };
+  if (!stored) return { keys: [], logs: [], secrets: [] };
   try {
     return parseRawData(stored);
   } catch {
-    return { keys: [], logs: [] };
+    return { keys: [], logs: [], secrets: [] };
   }
 };
 
@@ -186,7 +200,7 @@ export const createVault = async (pin: string): Promise<void> => {
   migrateLegacyStorageIfNeeded();
 
   const key = await deriveKey(pin);
-  const empty: VaultData = { keys: [], logs: [] };
+  const empty: VaultData = { keys: [], logs: [], secrets: [] };
   const payload = await encrypt(empty, key);
 
   localStorage.setItem(ENCRYPTED_STORAGE_KEY, payload);
