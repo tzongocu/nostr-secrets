@@ -10,6 +10,7 @@ export interface VaultData {
   keys: NostrKey[];
   logs: SignLog[];
   defaultKeyId?: string;
+  deletedSecretIds?: string[];
 }
 
 export interface VaultSettings {
@@ -144,6 +145,7 @@ const decrypt = async (payload: string, key: CryptoKey): Promise<VaultData> => {
     keys: (parsed.keys ?? []).map((k: any) => ({ ...k, createdAt: new Date(k.createdAt) })),
     logs: (parsed.logs ?? []).map((l: any) => ({ ...l, timestamp: new Date(l.timestamp) })),
     defaultKeyId: parsed.defaultKeyId,
+    deletedSecretIds: parsed.deletedSecretIds ?? [],
   };
 };
 
@@ -156,6 +158,7 @@ const parseRawData = (json: string): VaultData => {
     keys: (parsed.keys ?? []).map((k: any) => ({ ...k, createdAt: new Date(k.createdAt) })),
     logs: (parsed.logs ?? []).map((l: any) => ({ ...l, timestamp: new Date(l.timestamp) })),
     defaultKeyId: parsed.defaultKeyId,
+    deletedSecretIds: parsed.deletedSecretIds ?? [],
   };
 };
 

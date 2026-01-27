@@ -22,6 +22,7 @@ import {
 } from '@/lib/vault';
 import type { NostrKey, SignLog } from '@/lib/keyStore';
 import { disableBiometrics, storeCredentials, isBiometricsEnabled } from '@/hooks/useBiometrics';
+import { hasLegacyDeletedSecrets, migrateLegacyDeletedSecrets } from '@/lib/deletedSecretsStore';
 
 interface VaultContextValue {
   pinEnabled: boolean;
@@ -30,6 +31,7 @@ interface VaultContextValue {
   keys: NostrKey[];
   logs: SignLog[];
   defaultKeyId: string | null;
+  deletedSecretIds: string[];
   currentPin: string | null; // Exposed for biometric registration
   setupPin: (pin: string) => Promise<void>;
   unlock: (pin: string) => Promise<boolean>;
@@ -42,6 +44,9 @@ interface VaultContextValue {
   addLog: (log: SignLog) => Promise<void>;
   clearLogs: () => Promise<void>;
   setDefaultKey: (id: string | null) => Promise<void>;
+  markDeleted: (eventId: string) => Promise<void>;
+  unmarkDeleted: (eventId: string) => Promise<void>;
+  clearDeletedSecrets: () => Promise<void>;
   resetVault: () => void;
   enablePin: (pin: string) => Promise<void>;
   turnOffPin: () => void;
@@ -55,7 +60,7 @@ export const useVault = () => {
   return ctx;
 };
 
-const emptyVault: VaultData = { keys: [], logs: [] };
+const emptyVault: VaultData = { keys: [], logs: [], deletedSecretIds: [] };
 
 export const VaultProvider = ({ children }: { children: ReactNode }) => {
   const initialSettings = getVaultSettings();
@@ -81,6 +86,34 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
       setData(loaded);
     }
   }, [pinEnabled]);
+
+  // Migrate legacy deleted secrets on first load
+  const migrationDone = useRef(false);
+  useEffect(() => {
+    if (migrationDone.current) return;
+    if (!data) return; // Wait for vault to be loaded/unlocked
+    
+    if (hasLegacyDeletedSecrets()) {
+      const legacyIds = migrateLegacyDeletedSecrets();
+      if (legacyIds.length > 0) {
+        const base = dataRef.current ?? emptyVault;
+        const existingIds = base.deletedSecretIds ?? [];
+        const merged = [...new Set([...existingIds, ...legacyIds])];
+        const next: VaultData = { ...base, deletedSecretIds: merged };
+        
+        // Persist the migrated data
+        if (pinEnabled && pin) {
+          saveVault(pin, next);
+        } else if (!pinEnabled) {
+          saveUnencryptedVault(next);
+        }
+        
+        dataRef.current = next;
+        setData(next);
+      }
+      migrationDone.current = true;
+    }
+  }, [data, pinEnabled, pin]);
 
   const isSetup = pinEnabled ? vaultExists() : false;
   const isUnlocked = pinEnabled ? data !== null && pin !== null : data !== null;
@@ -220,6 +253,43 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
     [persist, pinEnabled, pin]
   );
 
+  const markDeleted = useCallback(
+    async (eventId: string) => {
+      if (pinEnabled && !pin) return;
+
+      const base: VaultData = dataRef.current ?? emptyVault;
+      const existing = base.deletedSecretIds ?? [];
+      if (existing.includes(eventId)) return;
+      
+      const next: VaultData = { ...base, deletedSecretIds: [...existing, eventId] };
+      await persist(next);
+    },
+    [persist, pinEnabled, pin]
+  );
+
+  const unmarkDeleted = useCallback(
+    async (eventId: string) => {
+      if (pinEnabled && !pin) return;
+
+      const base: VaultData = dataRef.current ?? emptyVault;
+      const existing = base.deletedSecretIds ?? [];
+      const next: VaultData = { ...base, deletedSecretIds: existing.filter(id => id !== eventId) };
+      await persist(next);
+    },
+    [persist, pinEnabled, pin]
+  );
+
+  const clearDeletedSecrets = useCallback(
+    async () => {
+      if (pinEnabled && !pin) return;
+
+      const base: VaultData = dataRef.current ?? emptyVault;
+      const next: VaultData = { ...base, deletedSecretIds: [] };
+      await persist(next);
+    },
+    [persist, pinEnabled, pin]
+  );
+
   const resetVault = useCallback(() => {
     // Clear biometrics credentials when resetting vault
     disableBiometrics();
@@ -268,6 +338,7 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
         keys: data?.keys ?? [],
         logs: data?.logs ?? [],
         defaultKeyId: data?.defaultKeyId ?? null,
+        deletedSecretIds: data?.deletedSecretIds ?? [],
         currentPin: pin,
         setupPin,
         unlock,
@@ -280,6 +351,9 @@ export const VaultProvider = ({ children }: { children: ReactNode }) => {
         addLog,
         clearLogs,
         setDefaultKey,
+        markDeleted,
+        unmarkDeleted,
+        clearDeletedSecrets,
         resetVault,
         enablePin,
         turnOffPin,
