@@ -26,7 +26,6 @@ const AddSecretSheet = ({ open, onOpenChange, defaultKeyId }: AddSecretSheetProp
   const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0].value);
   const [tags, setTags] = useState<TagType[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [syncToRelay, setSyncToRelay] = useState(false);
 
   // Load tags
   useEffect(() => {
@@ -104,25 +103,21 @@ const AddSecretSheet = ({ open, onOpenChange, defaultKeyId }: AddSecretSheetProp
         updatedAt: new Date(),
       };
 
-      // Optionally sync to relay as self-addressed DM
-      if (syncToRelay) {
-        const dmContent = JSON.stringify({
-          type: 'nostr-secret',
-          version: 1,
-          title: secret.title,
-          tags: secret.tags,
-          content: secret.encryptedContent,
-        });
+      // Auto sync to relay as self-addressed DM
+      const dmContent = JSON.stringify({
+        type: 'nostr-secret',
+        version: 1,
+        title: secret.title,
+        tags: secret.tags,
+        content: secret.encryptedContent,
+      });
 
-        const success = await sendDM(key, pubkeyHex, dmContent);
-        if (success) {
-          secret.syncedAt = new Date();
-          toast.success('Secret saved and synced');
-        } else {
-          toast.warning('Secret saved locally but sync failed');
-        }
+      const success = await sendDM(key, pubkeyHex, dmContent);
+      if (success) {
+        secret.syncedAt = new Date();
+        toast.success('Secret saved and synced');
       } else {
-        toast.success('Secret saved');
+        toast.warning('Secret saved locally but sync failed');
       }
 
       await addSecret(secret);
@@ -281,28 +276,6 @@ const AddSecretSheet = ({ open, onOpenChange, defaultKeyId }: AddSecretSheetProp
             </div>
           </div>
 
-          {/* Sync to Relay Toggle */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-card/50 border border-border">
-            <div className="flex items-center gap-3">
-              <Send className="w-5 h-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm font-medium text-foreground">Sync to Relay</p>
-                <p className="text-xs text-muted-foreground">Store encrypted on Nostr relays</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setSyncToRelay(!syncToRelay)}
-              className={`w-12 h-6 rounded-full transition-colors ${
-                syncToRelay ? 'bg-primary' : 'bg-muted'
-              }`}
-            >
-              <div
-                className={`w-5 h-5 rounded-full bg-foreground transition-transform ${
-                  syncToRelay ? 'translate-x-6' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
-          </div>
           </div>
 
           {/* Save Button - Fixed at bottom */}
