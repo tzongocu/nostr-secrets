@@ -143,7 +143,7 @@ interface SecretsScreenProps {
 
 const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
   const { keys, defaultKeyId, setDefaultKey, deletedSecretIds, markDeleted, unmarkDeleted, lastDecrypted, markDecrypted } = useVault();
-  const { secrets, isLoading, isConnected, error, refresh, deleteSecret } = useRelaySecrets(keys);
+  const { secrets, isLoading, isConnected, error, loadingProgress, refresh, deleteSecret } = useRelaySecrets(keys);
   const { queue: offlineQueue, count: offlineCount, retryAll: retryOfflineQueue, hydrateKeys } = useOfflineQueue();
   const { needsSync, isRunning: isSyncing, syncAll } = useRelaySync(secrets, keys);
   const [searchQuery, setSearchQuery] = useState('');
@@ -592,11 +592,15 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
           ))}
         </div>
 
-        {/* Loading State */}
+        {/* Loading State - only show full loader if no secrets yet */}
         {isLoading && secrets.length === 0 ? (
           <div className="text-center py-12">
             <Loader2 className="w-16 h-16 text-primary mx-auto mb-4 animate-spin" />
-            <p className="text-muted-foreground">Loading secrets from relays...</p>
+            <p className="text-muted-foreground">
+              {loadingProgress 
+                ? `Loading from relays (${loadingProgress.completed}/${loadingProgress.total})...`
+                : 'Connecting to relays...'}
+            </p>
           </div>
         ) : keys.length === 0 ? (
           <div className="text-center py-12">
