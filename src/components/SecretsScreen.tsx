@@ -172,12 +172,28 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
     };
   }, [showSelector]);
 
-  // Determine display key
+  // Determine display key - use defaultKeyId as primary source of truth
   const displayKey = useMemo(() => {
-    if (selectedKeyId) return keys.find(k => k.id === selectedKeyId);
-    if (defaultKeyId) return keys.find(k => k.id === defaultKeyId);
+    // If user selected a key in this session, use it
+    if (selectedKeyId) {
+      const selected = keys.find(k => k.id === selectedKeyId);
+      if (selected) return selected;
+    }
+    // Otherwise use the default key
+    if (defaultKeyId) {
+      const defaultKey = keys.find(k => k.id === defaultKeyId);
+      if (defaultKey) return defaultKey;
+    }
+    // Fallback to first key
     return keys.length > 0 ? keys[0] : null;
   }, [selectedKeyId, defaultKeyId, keys]);
+
+  // Reset selectedKeyId when it's no longer valid
+  useEffect(() => {
+    if (selectedKeyId && !keys.find(k => k.id === selectedKeyId)) {
+      setSelectedKeyId(null);
+    }
+  }, [keys, selectedKeyId]);
 
   // Get only tags that exist in current key's secrets
   const usedTags = useMemo(() => {
