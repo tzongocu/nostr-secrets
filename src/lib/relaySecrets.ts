@@ -261,8 +261,8 @@ export const decryptSecretContent = async (
       const conversationKey = await getConversationKey(bytesToHex(privKeyBytes), bytesToHex(pubKeyBytes));
       decrypted = await decryptNIP44(secret.encryptedContent, conversationKey);
     } else {
-      // NIP-04 fallback
-      decrypted = await decryptNIP04(secret.encryptedContent, privKeyHex, pubKeyHex);
+      // NIP-04 fallback - pass the original nsec, not hex
+      decrypted = await decryptNIP04(secret.encryptedContent, key.privateKey, pubKeyHex);
     }
 
     let payload: NostrSecretPayload;
