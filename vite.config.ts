@@ -15,30 +15,33 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.png", "robots.txt"],
+      includeAssets: ["favicon.png", "robots.txt", "apple-touch-icon.png", "icon-512.png"],
       manifest: {
         name: "Nostr Secrets Vault",
         short_name: "Nostr Secrets",
         description: "Secure encrypted password vault built on Nostr",
-        theme_color: "#1a0a2e",
+        theme_color: "#9d4edd",
         background_color: "#1a0a2e",
         display: "standalone",
         orientation: "portrait",
         scope: "/",
         start_url: "/",
+        categories: ["security", "utilities"],
         icons: [
           {
             src: "/pwa-192x192.png",
             sizes: "192x192",
             type: "image/png",
+            purpose: "any",
           },
           {
             src: "/pwa-512x512.png",
             sizes: "512x512",
             type: "image/png",
+            purpose: "any",
           },
           {
-            src: "/pwa-512x512.png",
+            src: "/icon-512.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",
