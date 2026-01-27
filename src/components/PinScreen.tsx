@@ -421,7 +421,7 @@ const PinScreen = ({ isSetup, isDisable, onCancel, onSuccess }: PinScreenProps) 
             <img
               src={logoVault}
               alt="Nostr Vault"
-              className="relative w-24 h-24 rounded-full"
+              className="relative w-32 h-32 rounded-full"
               style={{
                 boxShadow: `
                   0 0 20px hsl(var(--primary) / 0.3),
