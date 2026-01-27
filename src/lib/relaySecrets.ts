@@ -265,9 +265,15 @@ export const decryptSecretContent = async (
       decrypted = await decryptNIP04(secret.encryptedContent, privKeyHex, pubKeyHex);
     }
 
-    const payload = JSON.parse(decrypted) as NostrSecretPayload;
+    let payload: NostrSecretPayload;
+    try {
+      payload = JSON.parse(decrypted) as NostrSecretPayload;
+    } catch {
+      // Not valid JSON - not a secret
+      return null;
+    }
     
-    if (payload.type !== 'nostr-secret') {
+    if (!payload || payload.type !== 'nostr-secret') {
       return null;
     }
 
@@ -312,17 +318,19 @@ export const hydrateSecretsMetadata = async (
 ): Promise<RelaySecret[]> => {
   const keyMap = new Map(keys.map(k => [k.publicKey, k]));
   
-  const hydrated = await Promise.all(
+  const results = await Promise.all(
     secrets.map(async (secret) => {
       const key = keyMap.get(secret.keyId);
-      if (!key) return secret;
+      if (!key) return null; // No key = can't decrypt = skip
       
       const result = await hydrateSecretMetadata(secret, key);
-      return result || secret;
+      // Only return valid nostr-secrets, skip DMs that aren't secrets
+      return result;
     })
   );
 
-  return hydrated;
+  // Filter out nulls (DMs that aren't secrets or failed to decrypt)
+  return results.filter((s): s is RelaySecret => s !== null);
 };
 
 /**
