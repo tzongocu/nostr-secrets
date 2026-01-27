@@ -25,8 +25,12 @@ const PLAIN_STORAGE_KEY = 'nostr-vault-plain';
 // Legacy key used by older versions (could contain either JSON or encrypted payload)
 const LEGACY_STORAGE_KEY = 'nostr-vault';
 
-const SALT_KEY = 'nostr-vault-salt';
+// Legacy salt key - now salt is embedded in encrypted payload
+const LEGACY_SALT_KEY = 'nostr-vault-salt';
 const SETTINGS_KEY = 'nostr-vault-settings';
+
+// Payload format version for future compatibility
+const PAYLOAD_VERSION = 2; // v2 = salt embedded in payload
 const ITERATIONS = 100_000;
 
 // ---------- Helpers ----------
@@ -100,16 +104,7 @@ export const getVaultSettings = (): VaultSettings => {
 
 // ---------- Key derivation ----------
 
-const getSalt = (): Uint8Array => {
-  const stored = localStorage.getItem(SALT_KEY);
-  if (stored) return fromBase64(stored);
-  const salt = getRandomBytes(16);
-  localStorage.setItem(SALT_KEY, toBase64(salt));
-  return salt;
-};
-
-const deriveKey = async (pin: string): Promise<CryptoKey> => {
-  const salt = getSalt();
+const deriveKey = async (pin: string, salt: Uint8Array): Promise<CryptoKey> => {
   const pinBytes = encode(pin);
   const baseKey = await crypto.subtle.importKey('raw', pinBytes.buffer as ArrayBuffer, 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey(
@@ -122,22 +117,47 @@ const deriveKey = async (pin: string): Promise<CryptoKey> => {
 };
 
 // ---------- Encrypt / Decrypt ----------
+// Payload format v2: version (1 byte) + salt (16 bytes) + iv (12 bytes) + ciphertext
 
-const encrypt = async (data: VaultData, key: CryptoKey): Promise<string> => {
+const encrypt = async (data: VaultData, pin: string): Promise<string> => {
+  const salt = getRandomBytes(16); // Fresh salt for each encryption
   const iv = getRandomBytes(12);
+  const key = await deriveKey(pin, salt);
   const plain = encode(JSON.stringify(data));
   const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv.buffer as ArrayBuffer }, key, plain.buffer as ArrayBuffer);
-  // Prepend IV to cipher
-  const combined = new Uint8Array(iv.length + cipher.byteLength);
-  combined.set(iv, 0);
-  combined.set(new Uint8Array(cipher), iv.length);
+  
+  // Combine: version + salt + iv + cipher
+  const combined = new Uint8Array(1 + salt.length + iv.length + cipher.byteLength);
+  combined[0] = PAYLOAD_VERSION;
+  combined.set(salt, 1);
+  combined.set(iv, 1 + salt.length);
+  combined.set(new Uint8Array(cipher), 1 + salt.length + iv.length);
   return toBase64(combined);
 };
 
-const decrypt = async (payload: string, key: CryptoKey): Promise<VaultData> => {
+const decrypt = async (payload: string, pin: string): Promise<VaultData> => {
   const combined = fromBase64(payload);
-  const iv = combined.slice(0, 12);
-  const cipher = combined.slice(12);
+  
+  let salt: Uint8Array;
+  let iv: Uint8Array;
+  let cipher: Uint8Array;
+  
+  // Check version byte to determine format
+  if (combined[0] === PAYLOAD_VERSION) {
+    // v2 format: version (1) + salt (16) + iv (12) + ciphertext
+    salt = combined.slice(1, 17);
+    iv = combined.slice(17, 29);
+    cipher = combined.slice(29);
+  } else {
+    // Legacy v1 format: iv (12) + ciphertext, salt stored separately
+    const legacySalt = localStorage.getItem(LEGACY_SALT_KEY);
+    if (!legacySalt) throw new Error('Legacy salt not found');
+    salt = fromBase64(legacySalt);
+    iv = combined.slice(0, 12);
+    cipher = combined.slice(12);
+  }
+  
+  const key = await deriveKey(pin, salt);
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv.buffer as ArrayBuffer }, key, cipher.buffer as ArrayBuffer);
   const json = decode(new Uint8Array(plain));
   const parsed = JSON.parse(json);
@@ -192,12 +212,12 @@ export const vaultExists = (): boolean => {
 export const createVault = async (pin: string): Promise<void> => {
   migrateLegacyStorageIfNeeded();
 
-  const key = await deriveKey(pin);
   const empty: VaultData = { keys: [], logs: [] };
-  const payload = await encrypt(empty, key);
+  const payload = await encrypt(empty, pin);
 
   localStorage.setItem(ENCRYPTED_STORAGE_KEY, payload);
   localStorage.removeItem(PLAIN_STORAGE_KEY);
+  localStorage.removeItem(LEGACY_SALT_KEY); // Clean up legacy salt
   saveVaultSettings({ pinEnabled: true });
 };
 
@@ -206,16 +226,16 @@ export const unlockVault = async (pin: string): Promise<VaultData> => {
 
   const payload = localStorage.getItem(ENCRYPTED_STORAGE_KEY);
   if (!payload) throw new Error('Vault not found');
-  const key = await deriveKey(pin);
-  return decrypt(payload, key); // Will throw if wrong PIN
+  return decrypt(payload, pin); // Will throw if wrong PIN
 };
 
 export const saveVault = async (pin: string, data: VaultData): Promise<void> => {
   migrateLegacyStorageIfNeeded();
 
-  const key = await deriveKey(pin);
-  const payload = await encrypt(data, key);
+  const payload = await encrypt(data, pin);
   localStorage.setItem(ENCRYPTED_STORAGE_KEY, payload);
+  // After successful re-encryption with new salt, remove legacy salt
+  localStorage.removeItem(LEGACY_SALT_KEY);
 };
 
 export const deleteVault = (): void => {
@@ -223,7 +243,7 @@ export const deleteVault = (): void => {
 
   localStorage.removeItem(ENCRYPTED_STORAGE_KEY);
   localStorage.removeItem(PLAIN_STORAGE_KEY);
-  localStorage.removeItem(SALT_KEY);
+  localStorage.removeItem(LEGACY_SALT_KEY);
   saveVaultSettings({ pinEnabled: false });
 };
 
@@ -233,16 +253,16 @@ export const disablePin = (currentData: VaultData): void => {
   // Convert encrypted vault to unencrypted
   localStorage.setItem(PLAIN_STORAGE_KEY, JSON.stringify(currentData));
   localStorage.removeItem(ENCRYPTED_STORAGE_KEY);
-  localStorage.removeItem(SALT_KEY);
+  localStorage.removeItem(LEGACY_SALT_KEY);
   saveVaultSettings({ pinEnabled: false });
 };
 
 export const enablePinWithData = async (pin: string, data: VaultData): Promise<void> => {
   migrateLegacyStorageIfNeeded();
 
-  const key = await deriveKey(pin);
-  const payload = await encrypt(data, key);
+  const payload = await encrypt(data, pin);
   localStorage.setItem(ENCRYPTED_STORAGE_KEY, payload);
   localStorage.removeItem(PLAIN_STORAGE_KEY);
+  localStorage.removeItem(LEGACY_SALT_KEY);
   saveVaultSettings({ pinEnabled: true });
 };
