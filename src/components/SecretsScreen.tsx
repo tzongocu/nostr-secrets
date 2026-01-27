@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, ChevronDown, ChevronUp, RefreshCw, Loader2, WifiOff, RotateCcw, Archive, Radio, CloudOff } from 'lucide-react';
+import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, ChevronDown, ChevronUp, RefreshCw, Loader2, WifiOff, RotateCcw, Archive, Radio, CloudOff, CloudUpload } from 'lucide-react';
 import { useVault } from '@/context/VaultContext';
 import { getStoredTags, type Tag as TagType } from '@/lib/secretStore';
 import { KEY_COLORS } from '@/lib/keyStore';
@@ -7,6 +7,7 @@ import { decryptNIP04, npubToHex, nsecToHex } from '@/lib/nostrRelay';
 import { getConversationKey, decryptNIP44 } from '@/lib/nip44';
 import { useRelaySecrets } from '@/hooks/useRelaySecrets';
 import { useOfflineQueue } from '@/hooks/useOfflineQueue';
+import { useRelaySync } from '@/hooks/useRelaySync';
 import { toast } from 'sonner';
 import logoN from '@/assets/logo-n.png';
 import AddSecretSheet from './AddSecretSheet';
@@ -144,6 +145,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
   const { keys, defaultKeyId, setDefaultKey, deletedSecretIds, markDeleted, unmarkDeleted } = useVault();
   const { secrets, isLoading, isConnected, error, refresh, deleteSecret } = useRelaySecrets(keys);
   const { queue: offlineQueue, count: offlineCount, retryAll: retryOfflineQueue, hydrateKeys } = useOfflineQueue();
+  const { needsSync, isRunning: isSyncing, syncAll } = useRelaySync(secrets, keys);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showAddSheet, setShowAddSheet] = useState(false);
@@ -427,6 +429,23 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
             Nostr <span className="text-primary">Secrets</span>
           </h1>
           <div className="ml-auto flex items-center gap-2">
+            {/* Sync indicator - secrets not on all relays */}
+            {needsSync > 0 && !isSyncing && (
+              <button
+                onClick={() => syncAll()}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/20 text-primary text-xs font-medium hover:bg-primary/30 transition-colors"
+                title={`${needsSync} secret(s) not on all relays`}
+              >
+                <CloudUpload className="w-3.5 h-3.5" />
+                {needsSync}
+              </button>
+            )}
+            {isSyncing && (
+              <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/20 text-primary text-xs font-medium">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Syncing...
+              </div>
+            )}
             {/* Offline queue indicator */}
             {offlineCount > 0 && (
               <button
