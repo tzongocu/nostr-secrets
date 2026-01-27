@@ -4,7 +4,7 @@ import { X, Shield, AlertTriangle, Lock, CheckCircle, Fingerprint } from 'lucide
 import { APP_VERSION } from '@/lib/constants';
 import { useVault } from '@/context/VaultContext';
 import Portal from './Portal';
-import logo from '@/assets/logo.png';
+import logoVault from '@/assets/logo-vault.png';
 import {
   isBiometricsEnabled,
   authenticateWithBiometric,
@@ -419,7 +419,7 @@ const PinScreen = ({ isSetup, isDisable, onCancel, onSuccess }: PinScreenProps) 
             <div className="absolute -inset-6 rounded-full bg-primary/10 blur-2xl" />
             <div className="absolute -inset-4 rounded-full bg-primary/15 blur-xl animate-pulse" />
             <img
-              src={logo}
+              src={logoVault}
               alt="Nostr Vault"
               className="relative w-24 h-24 rounded-full"
               style={{

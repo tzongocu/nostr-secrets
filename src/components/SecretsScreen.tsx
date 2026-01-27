@@ -9,7 +9,7 @@ import { useRelaySecrets } from '@/hooks/useRelaySecrets';
 import { useOfflineQueue } from '@/hooks/useOfflineQueue';
 import { useRelaySync } from '@/hooks/useRelaySync';
 import { toast } from 'sonner';
-import logoN from '@/assets/logo-n.png';
+import logoVault from '@/assets/logo-vault.png';
 import AddSecretSheet from './AddSecretSheet';
 import {
   AlertDialog,
@@ -426,7 +426,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
       {/* Fixed Header */}
       <div className="shrink-0 bg-background/80 backdrop-blur-sm p-4 pb-0 pt-10 z-10">
         <div className="flex items-center gap-3 mb-4">
-          <img src={logoN} alt="Logo" className="w-10 h-10 rounded-full neon-glow" />
+          <img src={logoVault} alt="Logo" className="w-10 h-10 rounded-full neon-glow" />
           <h1 className="text-xl font-bold text-foreground">
             Nostr <span className="text-primary">Secrets</span>
           </h1>
