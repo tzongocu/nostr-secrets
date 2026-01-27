@@ -1,130 +1,138 @@
 
-# Plan: Secrete exclusiv din Nostr Relays
+# Plan: Criptare Soft-Delete Store cu Vault Key
 
-## Rezumat
-Refactorizez aplicația pentru ca secretele să fie gestionate exclusiv prin Nostr relays. Secretele nu vor mai fi stocate local - vor fi încărcate din relay la pornire și salvate doar dacă relay-ul confirmă primirea.
+## Obiectiv
+Mută lista de ID-uri ale secretelor șterse din `localStorage` plain-text în vault-ul criptat, astfel încât să fie protejată de aceeași criptare AES-256-GCM folosită pentru chei.
 
-## Modificări principale
+## De ce este important?
+În acest moment, ID-urile secretelor șterse sunt vizibile în browser pentru oricine are acces la dispozitiv. Deși nu conțin datele secretelor, ele expun metadate care pot fi corelate cu activitatea pe relay-uri Nostr.
 
-### 1. Eliminare stocare locală pentru secrete
-**Fișiere afectate**: `src/lib/vault.ts`, `src/context/VaultContext.tsx`
+---
 
-- Eliminăm câmpul `secrets` din `VaultData` interface
-- Vault-ul va stoca doar: `keys`, `logs`, `defaultKeyId`
-- Secretele vor fi gestionate separat prin relay
+## Pași de Implementare
 
-### 2. Creare serviciu pentru încărcare secrete din relay
-**Fișier nou**: `src/lib/relaySecrets.ts`
+### Pasul 1: Extindere VaultData
+Adaugă un câmp nou pentru ID-urile șterse în structura vault-ului.
 
-- Funcție `fetchSecretsFromRelay(keys: NostrKey[])`
-  - Conectare la relay-uri
-  - Fetch self-addressed DMs (kind 4) unde `author = recipient`
-  - Parsare JSON pentru a extrage: `type: 'nostr-secret'`, `title`, `tags`, `content`
-  - Decriptare cu cheia corespunzătoare
-  - Returnare listă de secrete
+**Fișier:** `src/lib/vault.ts`
+- Adaugă `deletedSecretIds?: string[]` în interfața `VaultData`
+- Actualizează funcțiile `encrypt`/`decrypt` pentru a include noul câmp
 
-### 3. Hook pentru managementul secretelor
-**Fișier nou**: `src/hooks/useRelaySecrets.ts`
+### Pasul 2: Actualizare VaultContext
+Adaugă metode pentru gestionarea ID-urilor șterse în context.
 
-Acest hook va:
-- Încărca secretele automat când cheile sunt disponibile
-- Expune stare: `secrets`, `isLoading`, `error`, `isConnected`
-- Funcții: `refresh()`, `deleteSecret(eventId)`
+**Fișier:** `src/context/VaultContext.tsx`
+- Adaugă `deletedSecretIds: string[]` în state
+- Adaugă funcții: `markDeleted(eventId)`, `unmarkDeleted(eventId)`, `clearDeleted()`
+- Persistă automat în vault când se modifică lista
+
+### Pasul 3: Migrare deletedSecretsStore
+Actualizează modulul existent pentru a folosi vault-ul în loc de localStorage direct.
+
+**Fișier:** `src/lib/deletedSecretsStore.ts`
+- Păstrează funcțiile ca wrapper-e pentru compatibilitate
+- Adaugă logică de migrare: la prima încărcare, mută datele din localStorage în vault
+- Șterge cheia veche din localStorage după migrare
+
+### Pasul 4: Actualizare SecretsScreen
+Conectează UI-ul la noul sistem.
+
+**Fișier:** `src/components/SecretsScreen.tsx`
+- Înlocuiește `getDeletedSecretIds()` cu `deletedSecretIds` din context
+- Înlocuiește `markSecretAsDeleted()` cu `markDeleted()` din context
+- Înlocuiește `unmarkSecretAsDeleted()` cu `unmarkDeleted()` din context
+
+---
+
+## Diagrama Arhitecturală
 
 ```text
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│   UI/App    │────▶│ useRelay     │────▶│   Nostr     │
-│             │     │ Secrets      │     │   Relays    │
-│             │◀────│ (hook)       │◀────│             │
-└─────────────┘     └──────────────┘     └─────────────┘
-       │                   │
-       │                   ▼
-       │         ┌──────────────┐
-       └────────▶│ VaultContext │ (doar keys, logs)
-                 └──────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                      VaultData                              │
+├─────────────────────────────────────────────────────────────┤
+│  keys: NostrKey[]           ← Cheile private (criptat)     │
+│  logs: SignLog[]            ← Jurnalul de semnări (criptat)│
+│  defaultKeyId?: string      ← Cheie implicită (criptat)    │
+│  deletedSecretIds?: string[] ← NOU: ID-uri șterse (criptat)│
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                    AES-256-GCM + PBKDF2
+                              │
+                              ▼
+              localStorage['nostr-vault-encrypted']
 ```
 
-### 4. Modificare flow de salvare secret
-**Fișier**: `src/components/AddSecretSheet.tsx`
+---
 
-- Eliminăm `addSecret()` din vault
-- Salvarea eșuează complet dacă niciun relay nu confirmă
-- Toast de eroare: "Cannot save - no relay connection"
-- Toast de succes doar după confirmare relay
+## Comportament PIN Enabled vs Disabled
 
-### 5. Implementare ștergere din relay (NIP-09)
-**Fișier**: `src/lib/nostrRelay.ts`
+| Scenariul | Comportament |
+|-----------|--------------|
+| **PIN activat** | ID-urile șterse sunt criptate în vault |
+| **PIN dezactivat** | ID-urile șterse sunt în JSON necriptat (același nivel de securitate ca restul vault-ului) |
 
-Adăugăm funcție `deleteEvent(key, eventId)`:
-- Creează event kind 5 (NIP-09 Event Deletion)
-- Tags: `['e', eventId]`
-- Semnează și trimite pe toate relay-urile
+---
 
-### 6. Actualizare SecretsScreen
-**Fișier**: `src/components/SecretsScreen.tsx`
+## Migrare Automată
 
-- Folosește noul hook `useRelaySecrets` în loc de `secrets` din vault
-- Afișează loader în timp ce se încarcă de pe relay
-- Afișează mesaj când relay-ul nu răspunde
-- Eliminăm secțiunea "Orphaned Secrets" (nu mai există secrete locale)
-- Butonul de ștergere va chema `deleteSecret(eventId)`
+La prima încărcare după actualizare:
+1. Verifică dacă există date în vechiul `localStorage['nostr-secrets-deleted']`
+2. Dacă da, le mută în `VaultData.deletedSecretIds`
+3. Șterge cheia veche din localStorage
+4. Utilizatorul nu observă nimic - totul este automat
 
-### 7. Curățare date legacy
-**Fișier**: `src/components/SettingsScreen.tsx`
+---
 
-- Adăugăm buton "Clear local secrets cache" pentru a șterge orice secrete vechi din storage
-- Migrație automată la prima rulare
+## Detalii Tehnice
 
-## Detalii tehnice
-
-### Format DM pentru secret (existent)
-```json
-{
-  "type": "nostr-secret",
-  "version": 1,
-  "title": "My Secret",
-  "tags": ["passwords"],
-  "content": "encrypted_content_base64?iv=..."
+### Modificări în `vault.ts`:
+```typescript
+export interface VaultData {
+  keys: NostrKey[];
+  logs: SignLog[];
+  defaultKeyId?: string;
+  deletedSecretIds?: string[]; // NOU
 }
 ```
 
-### Filter pentru fetch secrete proprii
-```json
-{
-  "kinds": [4],
-  "authors": ["my_pubkey_hex"],
-  "#p": ["my_pubkey_hex"]
+### Modificări în `VaultContext.tsx`:
+```typescript
+interface VaultContextValue {
+  // ... existing fields ...
+  deletedSecretIds: string[];
+  markDeleted: (eventId: string) => Promise<void>;
+  unmarkDeleted: (eventId: string) => Promise<void>;
+  clearDeletedSecrets: () => Promise<void>;
 }
 ```
 
-### NIP-09 Deletion Event
-```json
-{
-  "kind": 5,
-  "pubkey": "my_pubkey",
-  "tags": [["e", "event_id_to_delete"]],
-  "content": "secret deleted",
-  "created_at": 1234567890,
-  "id": "...",
-  "sig": "..."
-}
+### Funcție de migrare în `deletedSecretsStore.ts`:
+```typescript
+export const migrateToVault = (): string[] => {
+  const legacy = localStorage.getItem('nostr-secrets-deleted');
+  if (!legacy) return [];
+  const ids = JSON.parse(legacy);
+  localStorage.removeItem('nostr-secrets-deleted');
+  return ids;
+};
 ```
 
-## Ordinea implementării
+---
 
-1. Creare `relaySecrets.ts` cu funcții de fetch și delete
-2. Creare hook `useRelaySecrets.ts`
-3. Actualizare `AddSecretSheet.tsx` - save strict pe relay
-4. Actualizare `SecretsScreen.tsx` - încărcare din relay
-5. Actualizare `vault.ts` și `VaultContext.tsx` - eliminare secrets
-6. Curățare date legacy în `SettingsScreen.tsx`
+## Impactul Schimbării
 
-## Comportament așteptat
+| Aspect | Înainte | După |
+|--------|---------|------|
+| **Stocare** | Plain-text în localStorage | Criptat în vault |
+| **Vizibilitate** | Oricine cu acces la browser | Doar cu PIN corect |
+| **Dependențe** | Independent | Parte din VaultContext |
+| **Migrare** | N/A | Automată, transparentă |
 
-| Acțiune | Comportament |
-|---------|--------------|
-| Deschidere app | Fetch secrete de pe relay pentru cheile disponibile |
-| Salvare secret | Trimite DM pe relay → succes doar dacă confirmat |
-| Ștergere secret | Trimite event kind 5 pe relay |
-| Offline | Afișează mesaj "Cannot connect to relays" |
-| Cheie ștearsă | Secretele asociate nu mai pot fi decriptate |
+## Riscuri și Mitigări
+
+1. **Risc:** Dacă vault-ul este blocat, nu poți accesa lista de șterse
+   **Mitigare:** Secretele șterse oricum nu sunt vizibile fără PIN (cheile sunt în vault)
+
+2. **Risc:** Pierdere date la migrare
+   **Mitigare:** Migrarea se face atomic - citim din vechi, salvăm în vault, apoi ștergem vechi
