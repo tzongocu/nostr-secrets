@@ -595,7 +595,13 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-foreground truncate">{secret.title}</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-foreground truncate">{secret.title}</h3>
+                          <span className="text-[10px] text-primary flex items-center gap-0.5 shrink-0">
+                            <Radio className="w-3 h-3" />
+                            {secret.relays.length}
+                          </span>
+                        </div>
                         <div className="flex items-center gap-2 mt-1">
                           {secret.tags.slice(0, 2).map(tagId => (
                             <span
@@ -626,10 +632,6 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
                           }`}
                         >
                           NIP-{secret.encryptionVersion === 2 ? '44' : '04'}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                          <Radio className="w-3 h-3" />
-                          {secret.relays.length}
                         </span>
                       </div>
                     </div>
