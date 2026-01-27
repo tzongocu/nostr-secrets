@@ -175,14 +175,22 @@ const parseSecretEvent = async (
     
     // Check if this is a self-addressed DM (author = recipient)
     if (event.pubkey !== recipientHex) {
+      console.log('[RelaySecrets] Skipping: not self-addressed DM', event.id.slice(0, 8));
       return null;
     }
 
-    // Find the key that owns this secret
-    const key = keys.find(k => npubToHex(k.publicKey) === event.pubkey);
+    // Find the key that owns this secret - STRICT CHECK
+    const key = keys.find(k => {
+      const keyPubHex = npubToHex(k.publicKey);
+      return keyPubHex === event.pubkey;
+    });
+    
     if (!key) {
+      console.log('[RelaySecrets] Skipping: key not found for pubkey', event.pubkey.slice(0, 16));
       return null;
     }
+    
+    console.log('[RelaySecrets] Processing secret for key:', key.name, key.id);
 
     // Decrypt the DM content
     const decrypted = await decryptNIP04(event.content, key.privateKey, event.pubkey);
