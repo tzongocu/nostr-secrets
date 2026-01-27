@@ -3,7 +3,8 @@ import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, Chev
 import { useVault } from '@/context/VaultContext';
 import { getStoredTags, type Tag as TagType } from '@/lib/secretStore';
 import { KEY_COLORS } from '@/lib/keyStore';
-import { decryptNIP04, npubToHex } from '@/lib/nostrRelay';
+import { decryptNIP04, npubToHex, nsecToHex } from '@/lib/nostrRelay';
+import { getConversationKey, decryptNIP44 } from '@/lib/nip44';
 import { useRelaySecrets } from '@/hooks/useRelaySecrets';
 import { toast } from 'sonner';
 import logoN from '@/assets/logo-n.png';
@@ -282,7 +283,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
     );
   };
 
-  const handleDecrypt = useCallback(async (secret: { id: string; keyId: string; encryptedContent: string }) => {
+  const handleDecrypt = useCallback(async (secret: { id: string; keyId: string; encryptedContent: string; encryptionVersion?: number }) => {
     const key = keys.find(k => k.id === secret.keyId);
     if (!key) {
       toast.error('Key not found');
@@ -291,12 +292,28 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
 
     try {
       const pubkeyHex = npubToHex(key.publicKey);
+      const privHex = nsecToHex(key.privateKey);
       
-      const decrypted = await decryptNIP04(
-        secret.encryptedContent,
-        key.privateKey,
-        pubkeyHex
-      );
+      let decrypted: string | null = null;
+      
+      // Use hybrid decryption based on version
+      if (secret.encryptionVersion === 2) {
+        // NIP-44 v2 (ChaCha20 + HMAC-SHA256)
+        try {
+          const conversationKey = getConversationKey(privHex, pubkeyHex);
+          decrypted = decryptNIP44(secret.encryptedContent, conversationKey);
+        } catch (e) {
+          console.error('NIP-44 decrypt error:', e);
+          decrypted = null;
+        }
+      } else {
+        // NIP-04 (AES-256-CBC) - legacy
+        decrypted = await decryptNIP04(
+          secret.encryptedContent,
+          key.privateKey,
+          pubkeyHex
+        );
+      }
 
       if (decrypted) {
         setDecryptedSecrets(prev => ({ ...prev, [secret.id]: decrypted }));
