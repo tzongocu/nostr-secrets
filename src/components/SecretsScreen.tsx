@@ -149,8 +149,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
   const [showSelector, setShowSelector] = useState(false);
   const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null);
   const selectorRef = useRef<HTMLDivElement>(null);
-
-  const tags = getStoredTags();
+  const allTags = getStoredTags();
 
   // Close dropdown when clicking outside or after timeout
   useEffect(() => {
@@ -179,6 +178,20 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
     if (defaultKeyId) return keys.find(k => k.id === defaultKeyId);
     return keys.length > 0 ? keys[0] : null;
   }, [selectedKeyId, defaultKeyId, keys]);
+
+  // Get only tags that exist in current key's secrets
+  const usedTags = useMemo(() => {
+    if (!displayKey) return [];
+    
+    const keySecrets = secrets.filter(s => s.keyId === displayKey.id);
+    const usedTagIds = new Set<string>();
+    
+    keySecrets.forEach(secret => {
+      secret.tags.forEach(tagId => usedTagIds.add(tagId));
+    });
+    
+    return allTags.filter(tag => usedTagIds.has(tag.id));
+  }, [secrets, displayKey, allTags]);
 
   // Filter secrets by selected key, search, and tags
   const filteredSecrets = useMemo(() => {
@@ -274,12 +287,12 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
   };
 
   const getTagColor = (tagId: string): string => {
-    const tag = tags.find(t => t.id === tagId);
+    const tag = allTags.find(t => t.id === tagId);
     return tag?.color || 'hsl(var(--muted))';
   };
 
   const getTagName = (tagId: string): string => {
-    const tag = tags.find(t => t.id === tagId);
+    const tag = allTags.find(t => t.id === tagId);
     return tag?.name || tagId;
   };
 
@@ -382,7 +395,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
 
         {/* Tag Filter */}
         <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-3">
-          {tags.map(tag => (
+          {usedTags.map(tag => (
             <button
               key={tag.id}
               onClick={() => toggleTag(tag.id)}
