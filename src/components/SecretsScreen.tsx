@@ -661,7 +661,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
                             {secret.relays.length}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
                           {secret.tags.slice(0, 2).map(tagId => (
                             <span
                               key={tagId}
@@ -679,13 +679,12 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
                               +{secret.tags.length - 2}
                             </span>
                           )}
-                          {lastDecryptedTime && (
-                            <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 ml-auto">
-                              <Clock className="w-3 h-3" />
-                              {formatRelativeTime(lastDecryptedTime)}
-                            </span>
-                          )}
                         </div>
+                        {lastDecryptedTime && (
+                          <p className="text-[10px] text-foreground/60 font-light mt-1">
+                            Last opened {formatRelativeTime(lastDecryptedTime)}
+                          </p>
+                        )}
                       </div>
                       <div className="flex flex-col items-center gap-1 shrink-0 ml-3">
                         <Lock className="w-5 h-5 text-muted-foreground" />
