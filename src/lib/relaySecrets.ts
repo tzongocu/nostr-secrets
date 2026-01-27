@@ -144,13 +144,22 @@ const fetchFromRelay = async (
 ): Promise<RelaySecret[]> => {
   return new Promise((resolve, reject) => {
     const secrets: RelaySecret[] = [];
-    const ws = new WebSocket(relayUrl);
-    const subId = `secrets-${Math.random().toString(36).slice(2, 10)}`;
+    let ws: WebSocket;
     
+    try {
+      ws = new WebSocket(relayUrl);
+    } catch (e) {
+      reject(new Error('Invalid relay URL'));
+      return;
+    }
+    
+    const subId = `s-${Math.random().toString(36).slice(2, 8)}`;
+    
+    // Reduced timeout for faster UX
     const timeout = setTimeout(() => {
       ws.close();
       resolve(secrets); // Return what we have
-    }, 10000);
+    }, 8000);
 
     ws.onopen = () => {
       // Request self-addressed DMs (kind 4 where author = recipient)
@@ -160,11 +169,13 @@ const fetchFromRelay = async (
         '#p': pubkeys,
         limit: 100,
       };
-      console.log('[RelaySecrets] Fetching with filter:', { 
-        relay: relayUrl, 
-        pubkeys: pubkeys.map(p => p.slice(0, 16) + '...'),
-        keyNames: keys.map(k => k.name)
-      });
+      // Reduce console noise in production
+      if (import.meta.env.DEV) {
+        console.log('[RelaySecrets] Fetching:', { 
+          relay: relayUrl.slice(0, 30), 
+          keys: keys.length
+        });
+      }
       ws.send(JSON.stringify(['REQ', subId, filter]));
     };
 

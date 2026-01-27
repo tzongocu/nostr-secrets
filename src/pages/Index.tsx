@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, TouchEvent } from 'react';
+import { useState, useRef, useEffect, useCallback, TouchEvent, memo, useMemo } from 'react';
 import { useVault } from '@/context/VaultContext';
 import PinScreen from '@/components/PinScreen';
 import SecretsScreen from '@/components/SecretsScreen';
@@ -12,6 +12,24 @@ type Tab = 'secrets' | 'keys' | 'settings';
 const TABS: Tab[] = ['secrets', 'keys', 'settings'];
 const SWIPE_THRESHOLD = 50;
 const INACTIVITY_TIMEOUT_MS = 30 * 1000; // 30 seconds
+
+// Memoized background component to prevent re-renders
+const BackgroundLayers = memo(() => (
+  <>
+    {/* Background */}
+    <div
+      className="fixed inset-0 bg-cover bg-center opacity-10 pointer-events-none"
+      style={{ backgroundImage: `url(${background})` }}
+    />
+    {/* Gradient overlay */}
+    <div className="fixed inset-0 bg-gradient-to-b from-background/50 via-background/80 to-background pointer-events-none" />
+    {/* Scan lines effect */}
+    <div className="fixed inset-0 opacity-[0.02] pointer-events-none">
+      <div className="absolute inset-0 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,hsl(var(--primary)/0.1)_2px,hsl(var(--primary)/0.1)_4px)]" />
+    </div>
+  </>
+));
+BackgroundLayers.displayName = 'BackgroundLayers';
 
 const Index = () => {
   const { pinEnabled, isSetup, isUnlocked, lock } = useVault();
@@ -114,6 +132,15 @@ const Index = () => {
     setTimeout(() => setIsTransitioning(false), 300);
   };
 
+  const currentIndex = TABS.indexOf(activeTab);
+  const tabWidth = 100 / TABS.length;
+
+  // Memoize tab position calculation (must be before early returns)
+  const tabStyle = useMemo(() => ({
+    width: `${TABS.length * 100}%`,
+    transform: `translateX(calc(-${currentIndex * tabWidth}% + ${swipeOffset}px))`,
+  }), [currentIndex, tabWidth, swipeOffset]);
+
   // Show PIN screen if PIN is enabled and vault not unlocked
   if (pinEnabled && !isUnlocked) {
     return (
@@ -144,26 +171,10 @@ const Index = () => {
     );
   }
 
-  const currentIndex = TABS.indexOf(activeTab);
-  const tabWidth = 100 / TABS.length;
-
   return (
     <div className="h-screen flex flex-col bg-background relative overflow-hidden">
-      {/* Background */}
-      <div
-        className="fixed inset-0 bg-cover bg-center opacity-10 pointer-events-none"
-        style={{ backgroundImage: `url(${background})` }}
-      />
+      <BackgroundLayers />
 
-      {/* Gradient overlay */}
-      <div className="fixed inset-0 bg-gradient-to-b from-background/50 via-background/80 to-background pointer-events-none" />
-
-      {/* Scan lines effect */}
-      <div className="fixed inset-0 opacity-[0.02] pointer-events-none">
-        <div className="absolute inset-0 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,hsl(var(--primary)/0.1)_2px,hsl(var(--primary)/0.1)_4px)]" />
-      </div>
-
-      {/* Main content - swipeable screens */}
       <main 
         className="h-0 flex-1 relative z-10 max-w-md mx-auto w-full overflow-hidden"
         onTouchStart={handleTouchStart}
@@ -171,11 +182,8 @@ const Index = () => {
         onTouchEnd={handleTouchEnd}
       >
         <div 
-          className="flex h-full transition-transform duration-300 ease-out"
-          style={{ 
-            width: `${TABS.length * 100}%`,
-            transform: `translateX(calc(-${currentIndex * tabWidth}% + ${swipeOffset}px))`,
-          }}
+          className="flex h-full transition-transform duration-300 ease-out will-change-transform"
+          style={tabStyle}
         >
           <div className="h-full pb-20 px-0.5" style={{ width: `${tabWidth}%` }}>
             <SecretsScreen isActive={activeTab === 'secrets'} />

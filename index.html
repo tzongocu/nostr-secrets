@@ -15,28 +15,68 @@
     <title>Nostr Secrets Vault</title>
     <meta name="description" content="Secure encrypted password vault built on Nostr" />
     <meta name="author" content="botrift.com" />
+    <meta name="robots" content="index, follow" />
 
-    <!-- PWA Icons -->
+    <!-- PWA Icons - with preload for faster loading -->
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/pwa-192x192.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
 
+    <!-- Preload critical assets -->
+    <link rel="preload" href="/pwa-192x192.png" as="image" type="image/png" />
+
+    <!-- Open Graph -->
     <meta property="og:title" content="Nostr Secrets Vault" />
     <meta property="og:description" content="Secure encrypted password vault built on Nostr" />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta property="og:site_name" content="Nostr Secrets Vault" />
 
+    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@botrift" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
 
-    <!-- Preconnect to reduce latency -->
-    <link rel="preconnect" href="wss://relay.damus.io" />
-    <link rel="preconnect" href="wss://nos.lol" />
+    <!-- DNS Prefetch for relay connections -->
+    <link rel="dns-prefetch" href="//relay.damus.io" />
+    <link rel="dns-prefetch" href="//nos.lol" />
+    <link rel="dns-prefetch" href="//relay.nostr.band" />
+
+    <!-- Critical CSS inline for faster FCP -->
+    <style>
+      html, body, #root {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        background-color: #1a0a2e;
+        color: #e0e0e0;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      /* Skeleton loader for initial load */
+      .app-loader {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        background: linear-gradient(180deg, #1a0a2e 0%, #0d051a 100%);
+      }
+      .app-loader::after {
+        content: "";
+        width: 40px;
+        height: 40px;
+        border: 3px solid rgba(157, 78, 221, 0.2);
+        border-top-color: #9d4edd;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="app-loader"></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
