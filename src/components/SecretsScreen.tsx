@@ -595,18 +595,7 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-foreground truncate">{secret.title}</h3>
-                          <span 
-                            className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-medium shrink-0 ${
-                              secret.encryptionVersion === 2 
-                                ? 'bg-primary/20 text-primary' 
-                                : 'bg-muted text-muted-foreground'
-                            }`}
-                          >
-                            NIP-{secret.encryptionVersion === 2 ? '44' : '04'}
-                          </span>
-                        </div>
+                        <h3 className="font-semibold text-foreground truncate">{secret.title}</h3>
                         <div className="flex items-center gap-2 mt-1">
                           {secret.tags.slice(0, 2).map(tagId => (
                             <span
@@ -627,7 +616,18 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
                           )}
                         </div>
                       </div>
-                      <Lock className="w-5 h-5 text-muted-foreground shrink-0 ml-3" />
+                      <div className="flex flex-col items-center gap-1 shrink-0 ml-3">
+                        <Lock className="w-5 h-5 text-muted-foreground" />
+                        <span 
+                          className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-medium ${
+                            secret.encryptionVersion === 2 
+                              ? 'bg-primary/20 text-primary' 
+                              : 'bg-muted text-muted-foreground'
+                          }`}
+                        >
+                          NIP-{secret.encryptionVersion === 2 ? '44' : '04'}
+                        </span>
+                      </div>
                     </div>
                   </button>
 
