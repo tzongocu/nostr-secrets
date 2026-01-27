@@ -237,6 +237,17 @@ Contributions are welcome! Please follow these steps:
 
 ## 📄 License
 
+
+## 📥 Download
+
+You can download the latest version of the application ready to install:
+
+<a href="https://github.com/tzongocu/nostr-secrets/raw/main/nostr-secrets.apk">
+  <img src="https://img.shields.io/badge/DOWNLOAD-APK-brightgreen?style=for-the-badge&logo=android" alt="Download APK"/>
+</a>
+
+> **Note:** After downloading, you will need to allow installation from "Unknown Sources" in your Android phone's settings to be able to install the APK file.
+
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## ⚠️ Security Notice
