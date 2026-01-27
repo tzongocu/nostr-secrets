@@ -436,7 +436,7 @@ const PinScreen = ({ isSetup, isDisable, onCancel, onSuccess }: PinScreenProps) 
 
         {/* App Title */}
         <h1 className="text-xl font-bold text-foreground mb-1">
-          Nostr <span className="text-primary">Authenticator</span>
+          Nostr <span className="text-primary">Secrets Vault</span>
         </h1>
         
         {/* Subtitle */}
@@ -509,7 +509,7 @@ const PinScreen = ({ isSetup, isDisable, onCancel, onSuccess }: PinScreenProps) 
       {/* Footer Info */}
       <div className="absolute bottom-6 left-0 right-0 z-20">
         <div className="text-center opacity-40">
-          <p className="text-xs text-muted-foreground">Nostr Authenticator v{APP_VERSION}</p>
+          <p className="text-xs text-muted-foreground">Nostr Secrets Vault v{APP_VERSION}</p>
           <p className="text-xs text-muted-foreground">
             designed by{' '}
             <a 

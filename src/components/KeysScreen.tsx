@@ -579,7 +579,7 @@ const KeysScreen = ({ isActive = true }: KeysScreenProps) => {
         <div className="flex items-start gap-2 opacity-50">
           <AlertTriangle className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
           <p className="text-xs text-muted-foreground">
-            Save your private key (nsec) in a secure location. Nostr Authenticator by botrift.com is not responsible for lost keys.
+            Save your private key (nsec) in a secure location. Nostr Secrets Vault by botrift.com is not responsible for lost keys.
           </p>
         </div>
       </div>
