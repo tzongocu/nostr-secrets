@@ -5,6 +5,7 @@ import { getStoredTags, addTag as addTagToStore, TAG_COLORS, type Tag as TagType
 import { npubToHex, sendDM, nsecToHex } from '@/lib/nostrRelay';
 import { getConversationKey, encryptNIP44 } from '@/lib/nip44';
 import { KEY_COLORS, type NostrKey } from '@/lib/keyStore';
+import { addToQueue, getQueueCount } from '@/lib/offlineQueue';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
@@ -146,16 +147,18 @@ const AddSecretSheet = ({ open, onOpenChange, defaultKeyId, onSecretSaved }: Add
         content: encrypted,
       });
 
-      // Send to relay - MUST succeed for save to complete
+      // Send to relay - queue if offline
       const result = await sendDM(key, pubkeyHex, dmContent);
       
       if (!result.success) {
-        toast.error('Cannot save - no relay connection');
-        setIsSaving(false);
-        return;
+        // Add to offline queue for retry
+        addToQueue(key, pubkeyHex, dmContent, 'Initial save failed');
+        toast.warning('Saved to queue', {
+          description: 'Will retry when connection is restored'
+        });
+      } else {
+        toast.success(`Secret saved to ${result.confirmedRelays}/${result.totalRelays} relays`);
       }
-
-      toast.success(`Secret saved to ${result.confirmedRelays}/${result.totalRelays} relays`);
 
       // Reset form
       setTitle('');

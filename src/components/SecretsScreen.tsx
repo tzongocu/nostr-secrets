@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, ChevronDown, ChevronUp, RefreshCw, Loader2, WifiOff, RotateCcw, Archive, Radio } from 'lucide-react';
+import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, ChevronDown, ChevronUp, RefreshCw, Loader2, WifiOff, RotateCcw, Archive, Radio, CloudOff } from 'lucide-react';
 import { useVault } from '@/context/VaultContext';
 import { getStoredTags, type Tag as TagType } from '@/lib/secretStore';
 import { KEY_COLORS } from '@/lib/keyStore';
 import { decryptNIP04, npubToHex, nsecToHex } from '@/lib/nostrRelay';
 import { getConversationKey, decryptNIP44 } from '@/lib/nip44';
 import { useRelaySecrets } from '@/hooks/useRelaySecrets';
+import { useOfflineQueue } from '@/hooks/useOfflineQueue';
 import { toast } from 'sonner';
 import logoN from '@/assets/logo-n.png';
 import AddSecretSheet from './AddSecretSheet';
@@ -142,6 +143,7 @@ interface SecretsScreenProps {
 const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
   const { keys, defaultKeyId, setDefaultKey, deletedSecretIds, markDeleted, unmarkDeleted } = useVault();
   const { secrets, isLoading, isConnected, error, refresh, deleteSecret } = useRelaySecrets(keys);
+  const { queue: offlineQueue, count: offlineCount, retryAll: retryOfflineQueue, hydrateKeys } = useOfflineQueue();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showAddSheet, setShowAddSheet] = useState(false);
@@ -200,6 +202,13 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
       setSelectedKeyId(null);
     }
   }, [keys, selectedKeyId]);
+
+  // Hydrate offline queue with keys when vault is unlocked
+  useEffect(() => {
+    if (keys.length > 0) {
+      hydrateKeys(keys);
+    }
+  }, [keys, hydrateKeys]);
 
   // Get only tags that exist in current key's secrets
   const usedTags = useMemo(() => {
@@ -418,6 +427,19 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
             Nostr <span className="text-primary">Secrets</span>
           </h1>
           <div className="ml-auto flex items-center gap-2">
+            {/* Offline queue indicator */}
+            {offlineCount > 0 && (
+              <button
+                onClick={() => {
+                  retryOfflineQueue();
+                  toast.info(`Retrying ${offlineCount} pending save(s)...`);
+                }}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-warning/20 text-warning text-xs font-medium hover:bg-warning/30 transition-colors"
+              >
+                <CloudOff className="w-3.5 h-3.5" />
+                {offlineCount}
+              </button>
+            )}
             {isLoading ? (
               <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
             ) : !isConnected && keys.length > 0 ? (
