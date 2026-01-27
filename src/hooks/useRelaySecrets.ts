@@ -1,10 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  fetchSecretsFromRelays, 
-  deleteSecretFromRelays, 
-  hydrateSecretsMetadata,
-  type RelaySecret 
-} from '@/lib/relaySecrets';
+import { fetchSecretsFromRelays, deleteSecretFromRelays, type RelaySecret } from '@/lib/relaySecrets';
 import type { NostrKey } from '@/lib/keyStore';
 
 interface UseRelaySecretsResult {
@@ -12,7 +7,6 @@ interface UseRelaySecretsResult {
   isLoading: boolean;
   isConnected: boolean;
   error: string | null;
-  loadingProgress: { completed: number; total: number } | null;
   refresh: () => Promise<void>;
   deleteSecret: (eventId: string, key: NostrKey) => Promise<boolean>;
 }
@@ -22,10 +16,8 @@ export const useRelaySecrets = (keys: NostrKey[]): UseRelaySecretsResult => {
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loadingProgress, setLoadingProgress] = useState<{ completed: number; total: number } | null>(null);
   const lastFetchRef = useRef<number>(0);
   const keysRef = useRef<NostrKey[]>(keys);
-  const hydratingRef = useRef(false);
 
   // Update keys ref
   useEffect(() => {
@@ -39,7 +31,6 @@ export const useRelaySecrets = (keys: NostrKey[]): UseRelaySecretsResult => {
       setSecrets([]);
       setIsConnected(false);
       setError(null);
-      setLoadingProgress(null);
       return;
     }
 
@@ -52,26 +43,11 @@ export const useRelaySecrets = (keys: NostrKey[]): UseRelaySecretsResult => {
 
     setIsLoading(true);
     setError(null);
-    setLoadingProgress({ completed: 0, total: 1 });
 
     try {
-      // Progressive loading: update UI as each relay responds
-      const result = await fetchSecretsFromRelays(currentKeys, (progressSecrets, completed, total) => {
-        setLoadingProgress({ completed, total });
-        
-        // Hydrate metadata in background and update incrementally
-        if (!hydratingRef.current && progressSecrets.length > 0) {
-          hydratingRef.current = true;
-          hydrateSecretsMetadata(progressSecrets, currentKeys).then(hydrated => {
-            setSecrets(hydrated);
-            hydratingRef.current = false;
-          });
-        }
-      });
+      const result = await fetchSecretsFromRelays(currentKeys);
       
-      // Final hydration with all secrets
-      const hydrated = await hydrateSecretsMetadata(result.secrets, currentKeys);
-      setSecrets(hydrated);
+      setSecrets(result.secrets);
       setIsConnected(result.secrets.length > 0 || result.errors.length === 0);
       
       if (result.errors.length > 0 && result.secrets.length === 0) {
@@ -83,8 +59,6 @@ export const useRelaySecrets = (keys: NostrKey[]): UseRelaySecretsResult => {
       setIsConnected(false);
     } finally {
       setIsLoading(false);
-      setLoadingProgress(null);
-      hydratingRef.current = false;
     }
   }, []);
 
@@ -125,7 +99,6 @@ export const useRelaySecrets = (keys: NostrKey[]): UseRelaySecretsResult => {
     isLoading,
     isConnected,
     error,
-    loadingProgress,
     refresh,
     deleteSecret,
   };
