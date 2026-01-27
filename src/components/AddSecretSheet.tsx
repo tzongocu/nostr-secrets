@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { X, Tag, Plus, Key, Lock, Check, Loader2 } from 'lucide-react';
 import { useVault } from '@/context/VaultContext';
 import { getStoredTags, addTag as addTagToStore, TAG_COLORS, type Tag as TagType } from '@/lib/secretStore';
-import { encryptNIP04, npubToHex, sendDM } from '@/lib/nostrRelay';
+import { npubToHex, sendDM, nsecToHex } from '@/lib/nostrRelay';
+import { getConversationKey, encryptNIP44 } from '@/lib/nip44';
 import { KEY_COLORS, type NostrKey } from '@/lib/keyStore';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -83,20 +84,25 @@ const AddSecretSheet = ({ open, onOpenChange, defaultKeyId, onSecretSaved }: Add
     setIsSaving(true);
 
     try {
-      // Encrypt content using NIP-04 with self as recipient
+      // Encrypt content using NIP-44 v2 (ChaCha20 + HMAC-SHA256)
       const pubkeyHex = npubToHex(key.publicKey);
-      const encrypted = await encryptNIP04(content, key.privateKey, pubkeyHex);
-
-      if (!encrypted) {
+      const privHex = nsecToHex(key.privateKey);
+      
+      let encrypted: string;
+      try {
+        const conversationKey = getConversationKey(privHex, pubkeyHex);
+        encrypted = encryptNIP44(content, conversationKey);
+      } catch (e) {
+        console.error('NIP-44 encryption failed:', e);
         toast.error('Encryption failed');
         setIsSaving(false);
         return;
       }
 
-      // Create DM content with secret metadata
+      // Create DM content with secret metadata (version 2 = NIP-44)
       const dmContent = JSON.stringify({
         type: 'nostr-secret',
-        version: 1,
+        version: 2,
         title: title.trim(),
         tags: selectedTags,
         content: encrypted,

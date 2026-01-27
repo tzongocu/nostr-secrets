@@ -1,11 +1,16 @@
 /**
  * Relay Secrets - Fetch and manage secrets from Nostr relays
  * Secrets are stored as self-addressed DMs (kind 4) with type: 'nostr-secret'
+ * 
+ * Encryption versions:
+ * - Version 1: NIP-04 (AES-256-CBC, deprecated)
+ * - Version 2: NIP-44 (ChaCha20 + HMAC-SHA256, recommended)
  */
 
 import * as secp256k1 from '@noble/secp256k1';
 import { getRelays } from './relayStore';
-import { decryptNIP04, npubToHex } from './nostrRelay';
+import { decryptNIP04, npubToHex, nsecToHex } from './nostrRelay';
+import { getConversationKey, decryptNIP44, detectEncryptionVersion } from './nip44';
 import type { NostrKey } from './keyStore';
 
 export interface RelaySecret {
@@ -13,6 +18,7 @@ export interface RelaySecret {
   eventId: string; // Same as id, for clarity
   title: string;
   encryptedContent: string;
+  encryptionVersion: number; // 1 = NIP-04, 2 = NIP-44
   tags: string[];
   keyId: string;
   keyName: string;
@@ -230,11 +236,15 @@ const parseSecretEvent = async (
       return null;
     }
 
+    // Detect encryption version from payload or ciphertext format
+    const encryptionVersion = payload.version || detectEncryptionVersion(payload.content);
+    
     return {
       id: event.id,
       eventId: event.id,
       title: payload.title || 'Untitled',
       encryptedContent: payload.content,
+      encryptionVersion,
       tags: payload.tags || [],
       keyId: key.id,
       keyName: key.name,
