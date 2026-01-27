@@ -53,10 +53,17 @@ const nsecToBytes = (nsec: string): Uint8Array => {
 };
 
 /**
+ * Callback for streaming secrets as they arrive from relays
+ */
+export type OnSecretsUpdate = (secrets: RelaySecret[], isComplete: boolean) => void;
+
+/**
  * Fetch secrets from all configured relays for the given keys
+ * Streams results as they arrive from each relay
  */
 export const fetchSecretsFromRelays = async (
-  keys: NostrKey[]
+  keys: NostrKey[],
+  onUpdate?: OnSecretsUpdate
 ): Promise<{ secrets: RelaySecret[]; errors: string[] }> => {
   if (keys.length === 0) {
     return { secrets: [], errors: [] };
@@ -74,38 +81,55 @@ export const fetchSecretsFromRelays = async (
   // Build pubkey list
   const pubkeys = keys.map(k => npubToHex(k.publicKey));
 
-  // Fetch from all relays in parallel
+  // Helper to merge secrets and notify
+  const mergeAndNotify = (newSecrets: RelaySecret[], relayUrl: string, isComplete: boolean) => {
+    let hasChanges = false;
+    
+    for (const secret of newSecrets) {
+      if (seenIds.has(secret.id)) {
+        // Aggregate relays for duplicate secrets
+        const existing = allSecrets.find(s => s.id === secret.id);
+        if (existing && !existing.relays.includes(relayUrl)) {
+          existing.relays.push(relayUrl);
+          hasChanges = true;
+        }
+      } else {
+        seenIds.add(secret.id);
+        allSecrets.push({ ...secret, relays: [relayUrl] });
+        hasChanges = true;
+      }
+    }
+
+    if (hasChanges || isComplete) {
+      // Sort by date, newest first
+      allSecrets.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      onUpdate?.([...allSecrets], isComplete);
+    }
+  };
+
+  // Track completed relays
+  let completedRelays = 0;
+  const totalRelays = relays.length;
+
+  // Fetch from all relays in parallel, streaming results
   const fetchPromises = relays.map(async (relayUrl) => {
     try {
       const secrets = await fetchFromRelay(relayUrl, keys, pubkeys);
+      completedRelays++;
+      mergeAndNotify(secrets, relayUrl, completedRelays === totalRelays);
       return { relayUrl, secrets, error: null };
     } catch (e) {
+      completedRelays++;
+      errors.push(`${relayUrl}: ${e}`);
+      // Notify even on error to update completion status
+      if (completedRelays === totalRelays) {
+        onUpdate?.([...allSecrets], true);
+      }
       return { relayUrl, secrets: [], error: `${relayUrl}: ${e}` };
     }
   });
 
-  const results = await Promise.all(fetchPromises);
-
-  for (const result of results) {
-    if (result.error) {
-      errors.push(result.error);
-    }
-    for (const secret of result.secrets) {
-      if (seenIds.has(secret.id)) {
-        // Aggregate relays for duplicate secrets
-        const existing = allSecrets.find(s => s.id === secret.id);
-        if (existing && !existing.relays.includes(result.relayUrl)) {
-          existing.relays.push(result.relayUrl);
-        }
-      } else {
-        seenIds.add(secret.id);
-        allSecrets.push({ ...secret, relays: [result.relayUrl] });
-      }
-    }
-  }
-
-  // Sort by date, newest first
-  allSecrets.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  await Promise.all(fetchPromises);
 
   return { secrets: allSecrets, errors };
 };
