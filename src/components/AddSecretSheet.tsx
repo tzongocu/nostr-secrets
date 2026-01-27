@@ -147,15 +147,15 @@ const AddSecretSheet = ({ open, onOpenChange, defaultKeyId, onSecretSaved }: Add
       });
 
       // Send to relay - MUST succeed for save to complete
-      const success = await sendDM(key, pubkeyHex, dmContent);
+      const result = await sendDM(key, pubkeyHex, dmContent);
       
-      if (!success) {
+      if (!result.success) {
         toast.error('Cannot save - no relay connection');
         setIsSaving(false);
         return;
       }
 
-      toast.success('Secret saved to relay');
+      toast.success(`Secret saved to ${result.confirmedRelays}/${result.totalRelays} relays`);
 
       // Reset form
       setTitle('');
