@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, ChevronDown, ChevronUp } from 'lucide-react';
+import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 import { useVault } from '@/context/VaultContext';
 import { getStoredTags, type Secret, type Tag as TagType } from '@/lib/secretStore';
 import { KEY_COLORS } from '@/lib/keyStore';
@@ -208,6 +208,11 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
     
     return allTags.filter(tag => usedTagIds.has(tag.id));
   }, [secrets, displayKey, allTags]);
+
+  // Find orphaned secrets (secrets whose key no longer exists)
+  const orphanedSecrets = useMemo(() => {
+    return secrets.filter(secret => !keys.find(k => k.id === secret.keyId));
+  }, [secrets, keys]);
 
   // Filter secrets by selected key, search, and tags
   const filteredSecrets = useMemo(() => {
@@ -553,6 +558,40 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Orphaned Secrets Warning */}
+        {orphanedSecrets.length > 0 && (
+          <div className="mt-6">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4 text-destructive" />
+              <span className="text-sm font-medium text-destructive">
+                Orphaned Secrets ({orphanedSecrets.length})
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              These secrets belong to keys that no longer exist. You can delete them or the data may be unrecoverable.
+            </p>
+            <div className="space-y-2">
+              {orphanedSecrets.map((secret) => (
+                <div
+                  key={secret.id}
+                  className="glass-card rounded-xl p-3 border border-destructive/30 flex items-center justify-between"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-foreground truncate">{secret.title}</p>
+                    <p className="text-xs text-muted-foreground">Key missing: {secret.keyId.slice(0, 8)}...</p>
+                  </div>
+                  <button
+                    onClick={() => setDeleteSecretId(secret.id)}
+                    className="p-2 hover:bg-destructive/20 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4 text-destructive" />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
