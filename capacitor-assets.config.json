@@ -1,0 +1,20 @@
+{
+  "android": {
+    "icon": {
+      "sources": ["public/icon-512.png"]
+    },
+    "splash": {
+      "sources": ["public/icon-512.png"],
+      "backgroundColor": "#1a0a2e"
+    }
+  },
+  "ios": {
+    "icon": {
+      "sources": ["public/icon-512.png"]
+    },
+    "splash": {
+      "sources": ["public/icon-512.png"],
+      "backgroundColor": "#1a0a2e"
+    }
+  }
+}
