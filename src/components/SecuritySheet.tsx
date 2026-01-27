@@ -166,7 +166,7 @@ const SecuritySheet = ({ open, onOpenChange, onEnablePin, onLock }: SecurityShee
                     </div>
                     <div className="flex-1">
                       <p className="font-medium text-foreground">Biometrics</p>
-                      <p className="text-xs text-muted-foreground">Disponibil doar în aplicația Android (APK)</p>
+                      <p className="text-xs text-muted-foreground">Available only in the Android app (APK)</p>
                     </div>
                     <Switch checked={false} disabled />
                   </div>
