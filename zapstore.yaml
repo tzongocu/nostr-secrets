@@ -1,12 +1,12 @@
 name: "Nostr Secrets Vault"
 identifier: "com.nostr.secrets.vault"
 repository: "https://github.com/tzongocu/nostr-secrets"
-summary: "Zero-knowledge password manager using Nostr relays (v1.0.6)"
+summary: "Zero-knowledge password manager using Nostr relays (v1.0.7)"
 description: |
-  Nostr Secrets Vault v1.0.6 is a secure, end-to-end encrypted password manager built on the Nostr protocol.
+  Nostr Secrets Vault v1.0.7 is a secure, end-to-end encrypted password manager built on the Nostr protocol.
   All secrets are encrypted locally and synced across devices using Nostr relays as encrypted DMs.
 
-  Features (v1.0.6):
+  Features (v1.0.7):
     - AES-256-GCM encryption for the vault
     - NIP-44 (ChaCha20 + HMAC-SHA256) for secrets
     - Multi-key support
@@ -26,4 +26,4 @@ icon: "assets/icon.png"
 images:
   - "assets/screenshot1.png"
   - "assets/screenshot2.png"
-apk: "releases/nostr-secrets-v1.0.6.apk"
+apk: "releases/nostr-secrets-v1.0.7.apk"
