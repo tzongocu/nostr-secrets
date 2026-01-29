@@ -1,9 +1,10 @@
-include ':capacitor-android'
-project(':capacitor-android').projectDir = new File('./capacitor-android/')
-include ':capacitor-native-biometric'
-project(':capacitor-native-biometric').projectDir = new File('./capacitor-native-biometric/')
 include ':app'
 include ':capacitor-cordova-android-plugins'
+include ':capacitor-android'
+include ':capacitor-native-biometric'
+
 project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
+project(':capacitor-android').projectDir = new File('./capacitor-android/')
+project(':capacitor-native-biometric').projectDir = new File('./capacitor-native-biometric/')
 
 apply from: 'capacitor.settings.gradle'
