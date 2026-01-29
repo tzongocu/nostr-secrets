@@ -1,11 +1,9 @@
 /**
  * Relay Sync Service - Ensures secrets are distributed across all relays
- * Automatically republishes secrets to relays where they're missing
+ * Fetches original events and forwards them to relays where they're missing
  */
 
-import * as secp256k1 from '@noble/secp256k1';
 import { getRelays } from './relayStore';
-import { npubToHex, nsecToHex, encryptNIP04 } from './nostrRelay';
 import type { NostrKey } from './keyStore';
 import type { RelaySecret } from './relaySecrets';
 
@@ -83,98 +81,100 @@ export const getSecretsNeedingSync = (secrets: RelaySecret[]): SyncStatus[] => {
   return getSyncStatus(secrets).filter(s => s.missingRelays.length > 0);
 };
 
-const hexToBytes = (hex: string): Uint8Array => {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+/**
+ * Fetch an event by ID from a relay
+ */
+const fetchEventFromRelay = (
+  eventId: string,
+  relayUrl: string
+): Promise<any | null> => {
+  return new Promise((resolve) => {
+    try {
+      const ws = new WebSocket(relayUrl);
+      const subId = `fetch-${Date.now()}`;
+      
+      const timeout = setTimeout(() => {
+        ws.close();
+        resolve(null);
+      }, 5000);
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify(['REQ', subId, { ids: [eventId] }]));
+      };
+
+      ws.onmessage = (msg) => {
+        try {
+          const data = JSON.parse(msg.data);
+          if (data[0] === 'EVENT' && data[1] === subId && data[2]?.id === eventId) {
+            clearTimeout(timeout);
+            ws.send(JSON.stringify(['CLOSE', subId]));
+            ws.close();
+            resolve(data[2]);
+          } else if (data[0] === 'EOSE' && data[1] === subId) {
+            // End of stored events - event not found
+            clearTimeout(timeout);
+            ws.close();
+            resolve(null);
+          }
+        } catch {}
+      };
+
+      ws.onerror = () => {
+        clearTimeout(timeout);
+        ws.close();
+        resolve(null);
+      };
+    } catch {
+      resolve(null);
+    }
+  });
+};
+
+/**
+ * Fetch original event from any available source relay
+ */
+const fetchOriginalEvent = async (
+  eventId: string,
+  sourceRelays: string[]
+): Promise<any | null> => {
+  for (const relayUrl of sourceRelays) {
+    console.log(`[RelaySync] Trying to fetch event ${eventId.slice(0, 8)}... from ${relayUrl}`);
+    const event = await fetchEventFromRelay(eventId, relayUrl);
+    if (event) {
+      console.log(`[RelaySync] Successfully fetched original event from ${relayUrl}`);
+      return event;
+    }
   }
-  return bytes;
-};
-
-const bytesToHex = (bytes: Uint8Array): string => {
-  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-};
-
-const nsecToBytes = (nsec: string): Uint8Array => {
-  const { bech32 } = require('@scure/base');
-  const decoded = bech32.decode(nsec, 1500);
-  return new Uint8Array(bech32.fromWords(decoded.words));
+  console.log(`[RelaySync] Failed to fetch event from any source relay`);
+  return null;
 };
 
 /**
  * Republish a secret to specific relays
- * This fetches the original event and sends it to missing relays
+ * Fetches the original event and forwards it to missing relays
  */
 export const republishToRelays = async (
   secret: RelaySecret,
-  key: NostrKey,
+  _key: NostrKey, // No longer needed but kept for API compatibility
   targetRelays: string[]
 ): Promise<{ success: string[]; failed: string[] }> => {
   if (targetRelays.length === 0) {
     return { success: [], failed: [] };
   }
 
-  // We need to recreate the original event
-  // The secret contains the encrypted content, we need to re-wrap it as a DM
-  const pubkeyHex = npubToHex(key.publicKey);
-  const privBytes = nsecToBytes(key.privateKey);
-  const privHex = bytesToHex(privBytes);
-
-  // Create the DM payload (same format as original)
-  const dmPayload = JSON.stringify({
-    type: 'nostr-secret',
-    version: secret.encryptionVersion,
-    title: secret.title,
-    tags: secret.tags,
-    content: secret.encryptedContent,
-  });
-
-  // Encrypt the payload
-  const encrypted = await encryptNIP04(dmPayload, key.privateKey, pubkeyHex);
-  if (!encrypted) {
+  // Fetch the original signed event from a relay that has it
+  const originalEvent = await fetchOriginalEvent(secret.eventId, secret.relays);
+  
+  if (!originalEvent) {
+    console.log(`[RelaySync] Could not fetch original event for ${secret.title}`);
     return { success: [], failed: targetRelays };
   }
 
-  const created_at = Math.floor(Date.now() / 1000);
-  
-  const event = {
-    kind: 4,
-    pubkey: pubkeyHex,
-    created_at,
-    tags: [['p', pubkeyHex]], // Self-addressed DM
-    content: encrypted,
-  };
-
-  // Serialize for signing
-  const serialized = JSON.stringify([
-    0,
-    event.pubkey,
-    event.created_at,
-    event.kind,
-    event.tags,
-    event.content,
-  ]);
-
-  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(serialized));
-  const eventId = bytesToHex(new Uint8Array(hash));
-
-  // Sign event
-  const messageBytes = hexToBytes(eventId);
-  const signPrivBytes = hexToBytes(privHex);
-  const sigBytes = await secp256k1.schnorr.signAsync(messageBytes, signPrivBytes);
-  const sigHex = bytesToHex(sigBytes);
-
-  const signedEvent = {
-    ...event,
-    id: eventId,
-    sig: sigHex,
-  };
-
-  // Send to target relays
+  // Forward the exact original event to target relays
   const results = await Promise.all(
     targetRelays.map(async (relayUrl) => {
       try {
-        return await sendEventToRelay(relayUrl, signedEvent);
+        return await sendEventToRelay(relayUrl, originalEvent);
       } catch {
         return { url: relayUrl, success: false };
       }
