@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Nostr Secrets Vault</string>
+    <string name="title_activity_main">Nostr Secrets Vault</string>
+    <string name="package_name">com.nostr.secrets.vault</string>
+    <string name="custom_url_scheme">com.nostr.secrets.vault</string>
+</resources>
