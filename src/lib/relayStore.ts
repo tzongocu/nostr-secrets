@@ -6,14 +6,9 @@ const RELAYS_STORAGE_KEY = 'nostr-vault-relays';
 
 export const DEFAULT_RELAYS = [
   'wss://nos.lol/',
-  'wss://nostr.wine/',
-  'wss://offchain.pub/',
-  'wss://purplepag.es/',
   'wss://relay.damus.io/',
   'wss://relay.primal.net/',
-  'wss://relay.snort.social/',
   'wss://nostr.bitcoiner.social/',
-  'wss://relay.nostr.band/',
 ];
 
 export const getRelays = (): string[] => {
