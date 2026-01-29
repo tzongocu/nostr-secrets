@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, ChevronDown, ChevronUp, RefreshCw, Loader2, WifiOff, RotateCcw, Archive, Radio, CloudOff, CloudUpload, Clock } from 'lucide-react';
+import { Lock, Plus, Search, Tag, Eye, EyeOff, Copy, Check, Trash2, X, Key, ChevronDown, ChevronUp, RefreshCw, Loader2, WifiOff, RotateCcw, Archive, Radio, CloudOff, CloudUpload, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { useVault } from '@/context/VaultContext';
 import { getStoredTags, type Tag as TagType } from '@/lib/secretStore';
 import { KEY_COLORS } from '@/lib/keyStore';
 import { decryptNIP04, npubToHex, nsecToHex } from '@/lib/nostrRelay';
 import { getConversationKey, decryptNIP44 } from '@/lib/nip44';
 import { useRelaySecrets } from '@/hooks/useRelaySecrets';
+import { getRelays } from '@/lib/relayStore';
 import { useOfflineQueue } from '@/hooks/useOfflineQueue';
 import { useRelaySync } from '@/hooks/useRelaySync';
 import { toast } from 'sonner';
@@ -747,6 +748,50 @@ const SecretsScreen = ({ isActive = true }: SecretsScreenProps) => {
                           }
                         </p>
                       </div>
+
+                      {/* Relay Status Section */}
+                      {(() => {
+                        const allRelays = getRelays();
+                        const secretRelays = secret.relays || [];
+                        const hasCount = secretRelays.length;
+                        const totalCount = allRelays.length;
+                        
+                        // Helper to extract domain from relay URL
+                        const getDomain = (url: string) => {
+                          try {
+                            return url.replace(/^wss?:\/\//, '').replace(/\/$/, '');
+                          } catch {
+                            return url;
+                          }
+                        };
+                        
+                        return (
+                          <div className="mt-3 p-3 rounded-lg bg-background/30 border border-border/30">
+                            <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
+                              <Radio className="w-3.5 h-3.5" />
+                              <span>Relay Status ({hasCount}/{totalCount})</span>
+                            </div>
+                            <div className="space-y-1">
+                              {allRelays.map((relay) => {
+                                const hasSecret = secretRelays.includes(relay);
+                                return (
+                                  <div 
+                                    key={relay}
+                                    className={`flex items-center gap-2 text-xs ${hasSecret ? 'text-foreground' : 'text-muted-foreground/60'}`}
+                                  >
+                                    {hasSecret ? (
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" />
+                                    ) : (
+                                      <XCircle className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
+                                    )}
+                                    <span className="font-mono truncate">{getDomain(relay)}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       <div className="mt-3 flex justify-end">
                         <button
